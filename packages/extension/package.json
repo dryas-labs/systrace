@@ -1,0 +1,137 @@
+{
+  "name": "systrace",
+  "displayName": "DRYAS Systrace",
+  "description": "SysML v2 editing and agent tools powered by OpenSysML.",
+  "version": "0.1.5",
+  "publisher": "dryas-labs",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dryas-labs/systrace.git",
+    "directory": "packages/extension"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.cjs",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onLanguage:sysml",
+    "onLanguage:kerml"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "DRYAS starts configured local engine executables."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "The engine reads saved files in a local extension-host workspace."
+    }
+  },
+  "contributes": {
+    "configurationDefaults": {
+      "[sysml]": {
+        "editor.wordBasedSuggestions": "off"
+      },
+      "[kerml]": {
+        "editor.wordBasedSuggestions": "off"
+      }
+    },
+    "languages": [
+      {
+        "id": "sysml",
+        "aliases": [
+          "SysML v2",
+          "sysml"
+        ],
+        "extensions": [
+          ".sysml"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "kerml",
+        "aliases": [
+          "KerML",
+          "kerml"
+        ],
+        "extensions": [
+          ".kerml"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "dryas.restartLanguageServer",
+        "title": "DRYAS: Restart Language Server"
+      },
+      {
+        "command": "dryas.showLanguageServiceStatus",
+        "title": "DRYAS: Show Language Service Status"
+      },
+      {
+        "command": "dryas.validateProject",
+        "title": "DRYAS: Validate Saved Project"
+      },
+      {
+        "command": "dryas.showMcpConfiguration",
+        "title": "DRYAS: Show MCP Configuration"
+      }
+    ],
+    "configuration": {
+      "title": "DRYAS Systrace",
+      "properties": {
+        "dryas.lspPath": {
+          "type": "string",
+          "default": "sysml-lsp",
+          "scope": "machine-overridable",
+          "description": "OpenSysML LSP executable: absolute path, or sysml-lsp on PATH."
+        },
+        "dryas.apiPath": {
+          "type": "string",
+          "default": "sysml-grpc",
+          "scope": "machine-overridable",
+          "description": "OpenSysML API executable: absolute path, or sysml-grpc on PATH."
+        },
+        "dryas.modelRoots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "model"
+          ],
+          "scope": "resource",
+          "description": "Project-relative folders containing SysML/KerML source; used by the LSP and saved-file validation."
+        },
+        "dryas.expectedEngineVersion": {
+          "type": "string",
+          "default": "v0.9.2-dryas.4",
+          "scope": "resource",
+          "description": "Required development engine version, checked before use."
+        },
+        "dryas.requestTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "maximum": 300000,
+          "scope": "resource",
+          "description": "Deadline for an engine request in milliseconds."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@dryas/engine-adapter": "0.1.0",
+    "vscode-languageclient": "10.1.2"
+  }
+}

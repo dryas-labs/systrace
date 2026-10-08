@@ -1,0 +1,14 @@
+
+node_modules/
+dist/
+coverage/
+artifacts/
+.vscode-test/
+.tmp/
+*.vsix
+.env
+.env.*
+!.env.example
+*.local.json
+/config.js
+.engine-ci/

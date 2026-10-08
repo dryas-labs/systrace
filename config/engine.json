@@ -1,0 +1,9 @@
+{
+  "engine": "OpenSysML",
+  "version": "v0.9.2-dryas.4",
+  "source": "https://github.com/dryas-labs/OpenSysML",
+  "branch": "codex/fix-doc-language-features",
+  "commit": "277120e4ce9d08bb1f52400153a0cd89a4bd5ab1",
+  "base": "v0.9.2",
+  "distribution": "external executables; not bundled in this development VSIX"
+}

@@ -1,0 +1,51 @@
+{
+  "engine": "opensysml",
+  "rules": [
+    {
+      "code": "syntax",
+      "category": "SYNTAX",
+      "justification": "The message words missing ';' at end of declaration identify a syntax error."
+    },
+    {
+      "code": "reserved-keyword-name",
+      "category": "SYNTAX",
+      "justification": "The words reserved keyword and use it as a name identify invalid keyword/name syntax."
+    },
+    { "code": "unresolved", "category": "UNRESOLVED_NAME" },
+    {
+      "code": "ambiguous",
+      "category": "UNRESOLVED_NAME",
+      "justification": "The words ambiguous reference and candidates identify a name-resolution failure."
+    },
+    {
+      "code": "type.expr",
+      "messageRegex": "dimension|incommensurable",
+      "category": "UNIT",
+      "justification": "The words dimension or incommensurable identify a quantity/unit mismatch, before the generic type rule."
+    },
+    {
+      "code": "type",
+      "category": "WRONG_KIND",
+      "justification": "The words port definition and found partDef identify the wrong kind of referenced definition."
+    },
+    {
+      "code": "type.expr",
+      "category": "WRONG_KIND",
+      "justification": "The words cannot bind Natural value and typed by String identify incompatible value types."
+    },
+    {
+      "code": "bound-feature-types",
+      "category": "WRONG_KIND",
+      "justification": "The words Bound features and conforming types identify type conformance rather than syntax or name lookup."
+    },
+    { "messageRegex": "syntax|unexpected token|expected.*[;{}]", "category": "SYNTAX" },
+    { "messageRegex": "duplicate", "category": "DUPLICATE_NAME" },
+    { "messageRegex": "redefin", "category": "REDEFINITION" },
+    { "messageRegex": "multiplicit", "category": "MULTIPLICITY" },
+    { "messageRegex": "\\b(unit|quantity|dimension)", "category": "UNIT" },
+    {
+      "messageRegex": "must be typed by|must be an? .*(definition|def)\\b",
+      "category": "WRONG_KIND"
+    }
+  ]
+}

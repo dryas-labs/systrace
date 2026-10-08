@@ -1,0 +1,15 @@
+selection/
+designs/
+node_modules/
+**/dist/
+artifacts/
+.tmp/
+.vscode-test/
+coverage/
+package-lock.json
+LICENSE
+THIRD_PARTY_NOTICES.md
+packages/extension/LICENSE
+packages/extension/THIRD_PARTY_NOTICES.md
+/config.js
+.engine-ci/

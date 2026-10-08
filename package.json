@@ -1,0 +1,46 @@
+{
+  "name": "dryas-systrace",
+  "version": "0.1.5",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dryas-labs/systrace.git"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "packageManager": "npm@11.6.2",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "config:init": "node scripts/config.mjs --init",
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:engine": "node scripts/engine-smoke.mjs && node scripts/query-smoke.mjs",
+    "test:host": "node scripts/host-test.mjs",
+    "package:vsix": "npm run build && node scripts/package.mjs",
+    "check:content": "node scripts/check-content.mjs",
+    "check": "npm run check:content && npm run format:check && npm run lint && npm run typecheck && npm run build && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.96.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2",
+    "eslint": "10.12.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  }
+}

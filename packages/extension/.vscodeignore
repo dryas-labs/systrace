@@ -1,0 +1,10 @@
+**
+!package.json
+!README.md
+!README.zh-Hans.md
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+!language-configuration.json
+!dist/extension.cjs
+!dist/mcp.cjs
+**/*.map
