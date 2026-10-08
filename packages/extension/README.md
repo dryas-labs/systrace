@@ -1,6 +1,6 @@
 # DRYAS Systrace
 
-**English** | [Simplified Chinese](README.zh-Hans.md)
+**English** | [简体中文](README.zh-Hans.md)
 
 SysML v2 editing for VS Code and Cursor, powered by an external OpenSysML engine.
 This is an early development extension. View rendering and a built-in agent are future work.
@@ -13,6 +13,8 @@ spelling; undocumented elements show their declaration and source only.
 Use the details arrow, or Ctrl+Space while the suggestion list is open, to expand
 the editor's native detail panel. Update both external engine executables; if
 you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.4`.
+
+See the [engine support policy](../../docs/engine-support.md). The configured DRYAS build is the tested backend; upstream compatibility remains a goal, not a guarantee for arbitrary versions.
 
 ## Getting started
 
