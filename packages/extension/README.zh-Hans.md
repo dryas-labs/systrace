@@ -12,6 +12,8 @@
 升级时请同时更新两个外部引擎程序；若显式设置过 `dryas.expectedEngineVersion`，
 请改为 `v0.9.2-dryas.4`。
 
+参见[引擎支持政策](../../docs/engine-support.zh-Hans.md)。配置指定的 DRYAS 构建是已测试后端；上游兼容是目标，不代表任意版本均能直接使用。
+
 ## 开始使用
 
 1. 按仓库 `config/engine.json` 中记录的版本构建维护中的 OpenSysML。

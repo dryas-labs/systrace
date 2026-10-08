@@ -27,6 +27,8 @@ npm run package:vsix
 
 VSIX 输出在 `artifacts/`。在 VS Code 或 Cursor 中执行 **Extensions: Install from VSIX...** 安装。当前仓库不包含编辑器启动配置和示例项目。
 
+Systrace 优先支持已测试的 DRYAS OpenSysML 构建，并以上游兼容为目标。当前兼容边界、上游贡献政策及分发要求见[引擎支持政策](docs/engine-support.zh-Hans.md)。
+
 ## OpenSysML 引擎
 
 [config/engine.json](config/engine.json) 记录开发引擎的版本和源码提交。

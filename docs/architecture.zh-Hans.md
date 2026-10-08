@@ -72,3 +72,5 @@ config.example.js 是通用模板；config.js 是开发者填写的本地配置�
 参考：[VS Code LSP 指南](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide)、
 [扩展测试指南](https://code.visualstudio.com/api/working-with-extensions/testing-extension)、
 [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)。
+
+引擎兼容范围与下游维护责任见[引擎支持政策](engine-support.zh-Hans.md)。

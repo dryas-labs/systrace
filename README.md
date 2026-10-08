@@ -1,6 +1,6 @@
 # Systrace
 
-**English** | [Simplified Chinese](README.zh-Hans.md)
+**English** | [简体中文](README.zh-Hans.md)
 
 Systrace supports systems engineering modeling and the engineering digital thread.
 The first product is a VS Code extension, also tested in Cursor. It uses OpenSysML
@@ -29,6 +29,8 @@ npm run package:vsix
 ```
 
 The VSIX is written to `artifacts/`. In VS Code or Cursor, run **Extensions: Install from VSIX...** to install it. Editor launch configurations and example projects are not included in this repository.
+
+Systrace prioritizes tested DRYAS OpenSysML builds and aims for upstream compatibility. See the [engine support policy](docs/engine-support.md) for the current compatibility limits, upstream contribution policy and distribution requirements.
 
 ## OpenSysML engine
 

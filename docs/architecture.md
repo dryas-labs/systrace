@@ -1,6 +1,6 @@
 # Product architecture
 
-**English** | [Simplified Chinese](architecture.zh-Hans.md)
+**English** | [简体中文](architecture.zh-Hans.md)
 
 Systrace is a VS Code/Cursor extension. OpenSysML provides SysML semantics; the extension, engine adapter and MCP server provide editor integration, project sessions and read-only agent tools: `validate`, `find_element`, `describe_element`, `library_lookup`.
 
@@ -93,3 +93,5 @@ still require validation; small examples and development-host tests do not estab
 References: [VS Code LSP guide](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide),
 [extension testing guide](https://code.visualstudio.com/api/working-with-extensions/testing-extension),
 [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk).
+
+Engine compatibility and downstream maintenance responsibilities are described in the [engine support policy](engine-support.md).
