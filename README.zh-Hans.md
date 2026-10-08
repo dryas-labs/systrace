@@ -93,7 +93,7 @@ LSP 可处理未保存内容；MCP 验证的是磁盘上的保存快照。诊断
 例如 `npm run test:host -- --cursor --vsix`。
 
 测试日志、编辑器配置和构建产物保留在被忽略的本地目录，不进入源码提交。
-当前仓库尚未配置 CI 工作流，请在本地执行上述检查。
+GitHub Actions 会在 PR 和推送到 `main` 时，在 Windows 与 Linux 上执行代码检查、单元测试、真实引擎/MCP 测试及已打包扩展的 VS Code 宿主测试。成功的任务提供 VSIX 下载，保留 14 天。Cursor 宿主测试仍在本地运行。
 
 ## 代码组织
 

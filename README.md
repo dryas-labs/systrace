@@ -116,7 +116,7 @@ Add `--vsix` to host tests to install the packaged extension into an isolated pr
 and test its bundled code, for example `npm run test:host -- --cursor --vsix`.
 
 Test logs, editor configuration and build outputs remain in ignored local directories.
-This repository does not currently include a CI workflow. Run the checks above locally.
+GitHub Actions runs these checks on Windows and Linux for pull requests and pushes to `main`, including native engine/MCP tests and packaged VS Code extension tests. Successful jobs publish VSIX artifacts for 14 days. Cursor host tests remain a local check.
 
 ## Repository layout
 
