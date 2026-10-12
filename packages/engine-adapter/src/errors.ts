@@ -18,6 +18,7 @@ export type ErrorCode =
   | "EMPTY_PROJECT"
   | "PROJECT_CHANGED"
   | "STALE_CURSOR"
+  | "STALE_MODEL"
   | "LIMIT_EXCEEDED";
 
 export class AdapterError extends Error {

@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 import { randomUUID } from "node:crypto";
-import { z } from "zod";
-import categoryMap from "./category-map.json" with { type: "json" };
 import { AdapterError } from "./errors.js";
-import { EngineConnection, type EngineOptions, type ServerInfo } from "./engine.js";
+import {
+  LANGUAGE_ENGINE_INTERFACE_VERSION,
+  type LanguageBackend,
+  type EngineOptions,
+  type BackendInfo,
+  type BackendCapability,
+  type BackendDiagnostic,
+  type ModelHandle,
+  type ValidationEvidence,
+} from "./backend.js";
+import { createLanguageBackend } from "./provider.js";
+import { DEFAULT_LANGUAGE_ENGINE_PROVIDER } from "./default-engine.js";
 import { readSnapshot, relativeName, sameSnapshot, type Snapshot } from "./snapshot.js";
 import {
-  NativeQueries,
   parseInput,
   findInputSchema,
   describeInputSchema,
@@ -19,27 +27,6 @@ import {
   type QueryAnswer,
 } from "./queries.js";
 
-const diagnosticSchema = z.object({
-  severity: z
-    .string()
-    .refine((s) => ["error", "warning", "info", "hint"].includes(s.toLowerCase())),
-  message: z.string(),
-  code: z.string().default(""),
-  span: z
-    .object({
-      file: z.string().default(""),
-      startLine: z.number().int().nonnegative().default(0),
-      startCol: z.number().int().nonnegative().default(0),
-      endLine: z.number().int().nonnegative().default(0),
-      endCol: z.number().int().nonnegative().default(0),
-    })
-    .default({ file: "", startLine: 0, startCol: 0, endLine: 0, endCol: 0 }),
-});
-const parseSchema = z.object({
-  modelHash: z.string().min(1),
-  diagnostics: z.array(diagnosticSchema).default([]),
-  error: z.string().default(""),
-});
 export interface ProjectOptions {
   projectRoot: string;
   modelRoots?: string[];
@@ -55,32 +42,20 @@ interface Cursor {
   offset: number;
   paths: string[];
 }
-type RawDiagnostic = z.infer<typeof diagnosticSchema>;
-interface Diagnostic {
+interface Diagnostic extends BackendDiagnostic {
   id: string;
-  file: string;
-  line: number;
-  column: number;
-  severity: "error" | "warning" | "info" | "hint";
-  category: string;
-  message: string;
-  raw: RawDiagnostic;
 }
+
 interface Counts {
   errors: number;
   warnings: number;
 }
 export interface ValidationResult {
   status: "errors" | "incomplete";
-  engine: { name: "OpenSysML"; version: string };
-  library: { name: string; identity: "bundled-with-engine"; version: null };
-  completeness: {
-    parse: "unknown";
-    libraryLoad: "unknown";
-    resolution: "unknown";
-    reasons: string[];
-  };
-  checks: { performed: string[]; notProven: string[] };
+  engine: { name: string; version: string };
+  library: ValidationEvidence["library"];
+  completeness: ValidationEvidence["completeness"];
+  checks: ValidationEvidence["checks"];
   content: {
     sessionId: string;
     projectRevision: number;
@@ -94,8 +69,9 @@ export interface ValidationResult {
 interface Cache {
   snapshot: Snapshot;
   diagnostics: Diagnostic[];
-  info: ServerInfo;
-  modelHash: string;
+  info: BackendInfo;
+  model: ModelHandle;
+  evidence: ValidationEvidence;
   generation: number;
 }
 
@@ -104,7 +80,7 @@ type QueryKind = "find_element" | "describe_element" | "library_lookup";
 export interface ModelQueryResult<T = QueryItem> {
   status: "answered" | "partial";
   source: "project" | "bundled-library";
-  engine: { name: "OpenSysML"; version: string };
+  engine: { name: string; version: string };
   content: { sessionId: string; projectRevision: number | null };
   validation: ({ status: "errors" | "incomplete" } & Counts) | null;
   items: T[];
@@ -128,18 +104,8 @@ function counts(diagnostics: Diagnostic[]): Counts {
     warnings: diagnostics.filter((d) => d.severity === "warning").length,
   };
 }
-function category(d: RawDiagnostic): string {
-  return (
-    categoryMap.rules.find(
-      (rule) =>
-        (!rule.code || rule.code === d.code) &&
-        (!rule.messageRegex || new RegExp(rule.messageRegex, "i").test(d.message)),
-    )?.category ?? "UNCLASSIFIED"
-  );
-}
-
 export class ProjectSession {
-  private readonly engine: EngineConnection;
+  private readonly engine: LanguageBackend;
   private readonly sessionId = randomUUID();
   private revision = 0;
   private cache: Cache | undefined;
@@ -148,11 +114,35 @@ export class ProjectSession {
   private queue: Promise<unknown> = Promise.resolve();
   private pending = 0;
   private closed = false;
-  private libraryCache: { modelHash: string; generation: number } | undefined;
+  private libraryCache: ModelHandle | undefined;
   private queryPages = new Map<string, QueryPage>();
 
-  constructor(private readonly options: ProjectOptions) {
-    this.engine = new EngineConnection(options.engine);
+  constructor(
+    private readonly options: ProjectOptions,
+    backend?: LanguageBackend,
+  ) {
+    this.engine =
+      backend ?? createLanguageBackend(DEFAULT_LANGUAGE_ENGINE_PROVIDER, options.engine);
+    if (this.engine.interfaceVersion !== LANGUAGE_ENGINE_INTERFACE_VERSION) {
+      this.engine.close();
+      throw new AdapterError(
+        "ENGINE_PROTOCOL_ERROR",
+        "The language backend implements an incompatible interface version.",
+      );
+    }
+  }
+
+  private async requireCapability(
+    capability: BackendCapability,
+    signal?: AbortSignal,
+  ): Promise<BackendInfo> {
+    const info = await this.engine.start(signal);
+    if (!info.capabilities.includes(capability))
+      throw new AdapterError(
+        "UNSUPPORTED_CAPABILITY",
+        "The language engine does not support the requested operation.",
+      );
+    return info;
   }
 
   validate(input: ValidateInput = {}, signal?: AbortSignal): Promise<ValidationResult> {
@@ -258,28 +248,10 @@ export class ProjectSession {
     const project = counts(cached.diagnostics);
     return {
       status: project.errors ? "errors" : "incomplete",
-      engine: { name: "OpenSysML", version: cached.info.version },
-      library: {
-        name: "OpenSysML bundled standard library",
-        identity: "bundled-with-engine",
-        version: null,
-      },
-      completeness: {
-        parse: "unknown",
-        libraryLoad: "unknown",
-        resolution: "unknown",
-        reasons: [
-          "The native API returns diagnostics but does not certify validation completeness or report an independently verified library version.",
-        ],
-      },
-      checks: {
-        performed: ["OpenSysML ParseSources in strict conformance mode"],
-        notProven: [
-          "Complete standard coverage",
-          "Missing-library detection",
-          "Independent acceptance",
-        ],
-      },
+      engine: { ...cached.info.engine },
+      library: cached.evidence.library,
+      completeness: cached.evidence.completeness,
+      checks: cached.evidence.checks,
       content: {
         sessionId: this.sessionId,
         projectRevision: this.revision,
@@ -303,28 +275,13 @@ export class ProjectSession {
       !this.engine.connected ||
       previous.generation !== this.engine.generation
     ) {
-      const info = await this.engine.start(signal);
-      if (
-        !["parse_sources", "strict_conformance", "inline_language"].every((c) =>
-          info.capabilities.includes(c),
-        )
-      )
-        throw new AdapterError(
-          "UNSUPPORTED_CAPABILITY",
-          "The engine does not advertise the required multi-file validation capabilities.",
-        );
-      const parsed = parseSchema.safeParse(
-        await this.engine.request(
-          "ParseSources",
-          { documents: before.documents, strictConformance: true },
-          signal,
-        ),
+      const info = await this.requireCapability("validate", signal);
+      const documents = Object.freeze(
+        before.documents.map((document) => Object.freeze({ ...document })),
       );
-      if (!parsed.success || parsed.data.error)
-        throw new AdapterError(
-          "ENGINE_PROTOCOL_ERROR",
-          "The engine did not return a complete validation response.",
-        );
+      const validated = await this.engine.validate(documents, signal);
+      if (!this.engine.connected || validated.model.generation !== this.engine.generation)
+        throw new AdapterError("STALE_MODEL", "The engine changed while validating the project.");
       const after = await readSnapshot(
         this.options.projectRoot,
         this.options.modelRoots ?? ["model"],
@@ -335,6 +292,11 @@ export class ProjectSession {
           "PROJECT_CHANGED",
           "Project files changed during validation; validate the saved files again.",
         );
+      if (!this.engine.connected || validated.model.generation !== this.engine.generation)
+        throw new AdapterError(
+          "STALE_MODEL",
+          "The engine changed while the saved snapshot was being verified.",
+        );
       for (const doc of before.documents) {
         if (previous?.snapshot.documents.find((d) => d.name === doc.name)?.content !== doc.content)
           this.versions.set(doc.name, (this.versions.get(doc.name) ?? 0) + 1);
@@ -344,17 +306,18 @@ export class ProjectSession {
       this.cache = {
         snapshot: before,
         info,
-        modelHash: parsed.data.modelHash,
-        generation: this.engine.generation,
-        diagnostics: parsed.data.diagnostics.map((d, i) => ({
+        model: validated.model,
+        evidence: validated.evidence,
+        generation: validated.model.generation,
+        diagnostics: validated.diagnostics.map((d, i) => ({
           id: `r${this.revision}-d${i + 1}`,
-          file: d.span.file || "<engine>",
-          line: d.span.startLine,
-          column: d.span.startCol,
-          severity: d.severity.toLowerCase() as Diagnostic["severity"],
-          category: category(d),
+          file: d.file,
+          line: d.line,
+          column: d.column,
+          severity: d.severity,
+          category: d.category,
           message: d.message,
-          raw: d,
+          raw: d.raw,
         })),
       };
     }
@@ -415,59 +378,26 @@ export class ProjectSession {
         );
       page = stored;
     } else {
-      const info = await this.engine.start(signal);
-      if (!info.capabilities.includes("query"))
-        throw new AdapterError(
-          "UNSUPPORTED_CAPABILITY",
-          "The engine does not advertise native model queries.",
-        );
-      let modelHash: string;
+      await this.requireCapability(kind, signal);
+      let model: ModelHandle;
       if (library) {
-        if (!this.libraryCache || this.libraryCache.generation !== this.engine.generation) {
-          if (
-            !["parse_sources", "strict_conformance", "inline_language"].every((c) =>
-              info.capabilities.includes(c),
-            )
-          )
-            throw new AdapterError(
-              "UNSUPPORTED_CAPABILITY",
-              "The engine cannot initialize the required library query context.",
-            );
-          const parsed = parseSchema.safeParse(
-            await this.engine.request(
-              "ParseSources",
-              {
-                documents: [{ name: "library-query.sysml", language: "sysml", content: "" }],
-                strictConformance: true,
-              },
-              signal,
-            ),
-          );
-          if (
-            !parsed.success ||
-            parsed.data.error ||
-            parsed.data.diagnostics.some((d) => d.severity.toLowerCase() === "error")
-          )
-            throw new AdapterError(
-              "QUERY_UNAVAILABLE",
-              "The engine could not initialize an isolated bundled-library model.",
-            );
-          this.libraryCache = {
-            modelHash: parsed.data.modelHash,
-            generation: this.engine.generation,
-          };
-        }
-        modelHash = this.libraryCache.modelHash;
+        if (!this.libraryCache || this.libraryCache.generation !== this.engine.generation)
+          this.libraryCache = await this.engine.openLibrary(signal);
+        model = this.libraryCache;
       } else {
-        modelHash = (await this.loadSnapshot(before!, signal)).modelHash;
+        model = (await this.loadSnapshot(before!, signal)).model;
       }
-      const reader = new NativeQueries(this.engine, modelHash, signal);
       const answer: QueryAnswer<QueryItem> =
         kind === "find_element"
-          ? await reader.find(input as FindInput)
+          ? await this.engine.findElement(model, input as FindInput, signal)
           : kind === "describe_element"
-            ? await reader.describe(input as DescribeInput)
-            : await reader.library(input as LibraryInput);
+            ? await this.engine.describeElement(model, input as DescribeInput, signal)
+            : await this.engine.libraryLookup(model, input as LibraryInput, signal);
+      if (!this.engine.connected || model.generation !== this.engine.generation)
+        throw new AdapterError(
+          "STALE_MODEL",
+          "The engine changed while answering the model query.",
+        );
       page = {
         kind,
         filters: fingerprint,
@@ -507,7 +437,7 @@ export class ProjectSession {
     const result: ModelQueryResult = {
       status: page.answer.limitations.length ? "partial" : "answered",
       source: library ? "bundled-library" : "project",
-      engine: { name: "OpenSysML", version: info.version },
+      engine: { ...info.engine },
       content: { sessionId: this.sessionId, projectRevision: library ? null : page.revision },
       validation: diagnostics
         ? { ...diagnostics, status: diagnostics.errors ? "errors" : "incomplete" }

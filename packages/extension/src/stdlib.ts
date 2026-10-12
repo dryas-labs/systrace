@@ -2,7 +2,7 @@
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
-const engineScheme = "sysml-stdlib";
+import type { LibraryDocumentProtocol } from "@dryas/engine-adapter";
 type LibraryClient = Pick<LanguageClient, "initializeResult" | "sendRequest">;
 
 /** Read the owning engine's bundled sources without copying them into the project. */
@@ -13,7 +13,10 @@ export class StdlibDocuments implements vscode.TextDocumentContentProvider, vsco
   private client: LibraryClient | undefined;
   private timeoutMs = 30000;
 
-  constructor(readonly scheme: string) {
+  constructor(
+    readonly scheme: string,
+    private readonly protocol: LibraryDocumentProtocol,
+  ) {
     this.registration = vscode.workspace.registerTextDocumentContentProvider(scheme, this);
   }
 
@@ -22,19 +25,14 @@ export class StdlibDocuments implements vscode.TextDocumentContentProvider, vsco
   readonly uriConverters = {
     protocol2Code: (value: string): vscode.Uri => {
       const uri = vscode.Uri.parse(value);
-      return uri.scheme === engineScheme ? uri.with({ scheme: this.scheme }) : uri;
+      return uri.scheme === this.protocol.scheme ? uri.with({ scheme: this.scheme }) : uri;
     },
     code2Protocol: (uri: vscode.Uri): string =>
-      (uri.scheme === this.scheme ? uri.with({ scheme: engineScheme }) : uri).toString(),
+      (uri.scheme === this.scheme ? uri.with({ scheme: this.protocol.scheme }) : uri).toString(),
   };
 
   attach(client: LibraryClient, timeoutMs: number): boolean {
-    const experimental: unknown = client.initializeResult?.capabilities.experimental;
-    const supported =
-      !!experimental &&
-      typeof experimental === "object" &&
-      "openSysmlStdlibContent" in experimental &&
-      experimental.openSysmlStdlibContent === true;
+    const supported = this.protocol.supports(client.initializeResult?.capabilities);
     this.client = supported ? client : undefined;
     this.timeoutMs = timeoutMs;
     if (supported)
@@ -64,12 +62,9 @@ export class StdlibDocuments implements vscode.TextDocumentContentProvider, vsco
     let timer: ReturnType<typeof setTimeout> | undefined;
     let listener: vscode.Disposable | undefined;
     try {
+      const request = this.protocol.request(this.uriConverters.code2Protocol(uri));
       const result = await Promise.race([
-        client.sendRequest<unknown>(
-          "opensysml/stdlibContent",
-          { uri: this.uriConverters.code2Protocol(uri) },
-          cancellation.token,
-        ),
+        client.sendRequest<unknown>(request.method, request.params, cancellation.token),
         new Promise<never>((_, reject) => {
           listener = token.onCancellationRequested(() => {
             reject(new vscode.CancellationError());
@@ -88,14 +83,10 @@ export class StdlibDocuments implements vscode.TextDocumentContentProvider, vsco
         throw new Error(
           "The language server changed while reading the standard library. Open the definition again.",
         );
-      if (
-        !result ||
-        typeof result !== "object" ||
-        !("text" in result) ||
-        typeof result.text !== "string"
-      )
+      const text = this.protocol.decode(result);
+      if (text === undefined)
         throw new Error("The language server returned invalid standard-library content.");
-      return result.text;
+      return text;
     } finally {
       clearTimeout(timer);
       listener?.dispose();

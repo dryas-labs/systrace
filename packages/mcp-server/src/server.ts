@@ -3,6 +3,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
   ProjectSession,
+  DEFAULT_LANGUAGE_ENGINE_PROVIDER,
+  createLanguageBackend,
+  type LanguageEngineProvider,
   publicError,
   findInputSchema,
   describeInputSchema,
@@ -10,8 +13,12 @@ import {
   type ProjectOptions,
 } from "@dryas/engine-adapter";
 
-export function createServer(options: ProjectOptions) {
-  const session = new ProjectSession(options);
+export function createServer(
+  options: ProjectOptions,
+  provider: LanguageEngineProvider = DEFAULT_LANGUAGE_ENGINE_PROVIDER,
+) {
+  const backend = createLanguageBackend(provider, options.engine);
+  const session = new ProjectSession(options, backend);
   const server = new McpServer({ name: "dryas-systrace", version: "0.1.0" });
   server.registerTool(
     "validate",
@@ -65,7 +72,7 @@ export function createServer(options: ProjectOptions) {
     {
       title: "Find saved model elements",
       description:
-        "Search the saved project by exact name, qualified name, native metamodel kind, scope, transitive specialization or metadata values. Names, inheritance and metadata are resolved by OpenSysML. All metadata predicates must match one annotation. Cursors are bound to a session, query and saved revision. Results may include diagnostics from an invalid model and do not certify engineering correctness.",
+        "Search the saved project by exact name, qualified name, native metamodel kind, scope, transitive specialization or metadata values. Names, inheritance and metadata are resolved by the selected language engine. All metadata predicates must match one annotation. Cursors are bound to a session, query and saved revision. Results may include diagnostics from an invalid model and do not certify engineering correctness.",
       inputSchema: findInputSchema,
       annotations,
     },

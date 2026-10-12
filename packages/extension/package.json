@@ -1,7 +1,7 @@
 {
   "name": "systrace",
   "displayName": "DRYAS Systrace",
-  "description": "SysML v2 editing and agent tools powered by OpenSysML.",
+  "description": "SysML v2 editing and agent tools backed by a language engine.",
   "version": "0.1.5",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
@@ -94,13 +94,13 @@
           "type": "string",
           "default": "sysml-lsp",
           "scope": "machine-overridable",
-          "description": "OpenSysML LSP executable: absolute path, or sysml-lsp on PATH."
+          "description": "Language engine LSP executable: absolute path, or sysml-lsp on PATH."
         },
         "dryas.apiPath": {
           "type": "string",
           "default": "sysml-grpc",
           "scope": "machine-overridable",
-          "description": "OpenSysML API executable: absolute path, or sysml-grpc on PATH."
+          "description": "Language engine API executable: absolute path, or sysml-grpc on PATH."
         },
         "dryas.modelRoots": {
           "type": "array",
@@ -117,7 +117,7 @@
           "type": "string",
           "default": "v0.9.2-dryas.4",
           "scope": "resource",
-          "description": "Required development engine version, checked before use."
+          "description": "Required language engine build version, checked before use."
         },
         "dryas.requestTimeoutMs": {
           "type": "number",
@@ -125,7 +125,7 @@
           "minimum": 1000,
           "maximum": 300000,
           "scope": "resource",
-          "description": "Deadline for an engine request in milliseconds."
+          "description": "Deadline for a language engine request in milliseconds."
         }
       }
     }

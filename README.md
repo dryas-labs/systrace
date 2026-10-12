@@ -3,7 +3,7 @@
 **English** | [简体中文](README.zh-Hans.md)
 
 Systrace supports systems engineering modeling and the engineering digital thread.
-The first product is a VS Code extension, also tested in Cursor. It uses OpenSysML
+The product is a VS Code extension, also tested in Cursor. It uses a language engine
 for SysML v2 editing and an MCP server to connect external agents.
 
 This development version provides LSP integration and four read-only MCP tools: `validate`, `find_element`, `describe_element`, `library_lookup`. Validation and project queries use saved files. View rendering and a built-in agent are not implemented. These tools do not establish engineering correctness or full standards conformance.
@@ -17,7 +17,7 @@ npm ci
 npm run config:init
 ```
 
-Edit the generated **`config.js`** with the locations of your OpenSysML executables.
+Edit the generated **`config.js`** with the locations of your language engine executables.
 Git ignores this file; do not commit it. The tracked [config.example.js](config.example.js)
 provides generic defaults and field descriptions. `config.js` is trusted local
 JavaScript configuration for this repository's development scripts. It is not
@@ -30,9 +30,9 @@ npm run package:vsix
 
 The VSIX is written to `artifacts/`. In VS Code or Cursor, run **Extensions: Install from VSIX...** to install it. Editor launch configurations and example projects are not included in this repository.
 
-Systrace prioritizes tested DRYAS OpenSysML builds and aims for upstream compatibility. See the [engine support policy](docs/engine-support.md) for the current compatibility limits, upstream contribution policy and distribution requirements.
+See [Language engine](docs/language-engine.md) for the current selection.
 
-## OpenSysML engine
+## Language engine
 
 [config/engine.json](config/engine.json) records the development engine version and
 source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
@@ -42,7 +42,7 @@ Version 0.1.5 uses `v0.9.2-dryas.4`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
 complete `doc`. Update the VSIX and both external executables together. If you
 set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.4` too.
-With a compatible Go toolchain installed, run:
+With the build toolchain required by the configured language engine installed, run:
 
 ```sh
 node scripts/build-engine.mjs
@@ -108,7 +108,7 @@ the Settings UI; JSON settings files require normal JSON quoting and escaping.
 | Command                         | Purpose                                                                         |
 | ------------------------------- | ------------------------------------------------------------------------------- |
 | `npm run check`                 | Local-information checks, formatting, lint, types, build and adapter unit tests |
-| `npm run test:engine`           | Real OpenSysML multi-file validation and an MCP stdio client test               |
+| `npm run test:engine`           | Real language engine multi-file validation and an MCP stdio client test         |
 | `npm run test:host`             | Isolated VS Code extension-host tests                                           |
 | `npm run test:host -- --cursor` | The same host tests using the Cursor executable in `config.js`                  |
 | `npm run watch`                 | Rebuild development code as it changes                                          |
@@ -136,5 +136,5 @@ First-party DRYAS code uses the [Apache License 2.0](LICENSE).
 `SPDX-License-Identifier: Apache-2.0` identifies a source file's license. The build
 generates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) from the JavaScript
 dependencies actually bundled and includes licenses and notices in the VSIX.
-Licensing and release inventories for the external OpenSysML engine and its standard
+Licensing and release inventories for the external language engine and its standard
 library are managed separately.

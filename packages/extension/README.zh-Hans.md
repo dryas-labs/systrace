@@ -2,21 +2,21 @@
 
 [English](README.md) | **简体中文**
 
-面向 VS Code 和 Cursor 的 SysML v2 编辑扩展，由外部 OpenSysML 引擎提供语言能力。
-当前是早期开发版，view 渲染和内置 agent 属于后续工作。
+面向 VS Code 和 Cursor 的 SysML v2 编辑扩展，由外部 language engine（语言引擎）提供语言能力。
+当前是早期开发版，尚未实现 view 渲染和内置 agent。
 
-0.1.5 使用 OpenSysML `v0.9.2-dryas.4`。选中补全候选后，详情显示原生声明、引用名称、
+0.1.5 使用 language engine 构建 `v0.9.2-dryas.4`。选中补全候选后，详情显示原生声明、引用名称、
 实际声明来源、源文件名和完整文档。说明按需加载，与普通悬浮共用引擎的文档提取逻辑。
 别名保留原来的插入名称；没有文档的元素只显示声明和来源。
 点击详情箭头，或在补全列表已打开时按 Ctrl+Space，可展开编辑器原生的详情面板。
 升级时请同时更新两个外部引擎程序；若显式设置过 `dryas.expectedEngineVersion`，
 请改为 `v0.9.2-dryas.4`。
 
-参见[引擎支持政策](../../docs/engine-support.zh-Hans.md)。配置指定的 DRYAS 构建是已测试后端；上游兼容是目标，不代表任意版本均能直接使用。
+当前引擎选择见 [Language engine](../../docs/language-engine.zh-Hans.md)。
 
 ## 开始使用
 
-1. 按仓库 `config/engine.json` 中记录的版本构建维护中的 OpenSysML。
+1. 按仓库 `config/engine.json` 中记录的版本构建 language engine。
 2. 将 `sysml-lsp` 和 `sysml-grpc` 加入 PATH，或在编辑器的 **User Settings** 中设置
    **DRYAS: Lsp Path** 和 **DRYAS: Api Path**。不要把本机路径写入提交的工作区设置。
 3. 打开可信的项目文件夹，把 SysML/KerML 文件放在 `model/` 中，或通过

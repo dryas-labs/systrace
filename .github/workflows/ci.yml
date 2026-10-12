@@ -36,7 +36,7 @@ jobs:
         with:
           go-version: "1.25.x"
           cache: false
-      - name: Build configured OpenSysML engine
+      - name: Build configured language engine
         run: node scripts/build-engine.mjs
       - name: Test native engine and MCP tools
         run: npm run test:engine

@@ -8,8 +8,10 @@ import {
   ProjectSession,
   readSnapshot,
   publicError,
-  engineEnvironment,
-  ENGINE_VERSION,
+  DEFAULT_LANGUAGE_ENGINE_PROVIDER,
+  assertLanguageEngineProvider,
+  createLanguageBackend,
+  type LanguageEngineProvider,
   AdapterError,
   type ProjectOptions,
 } from "@dryas/engine-adapter";
@@ -47,7 +49,10 @@ interface ServiceStatus {
 }
 let manager: Manager | undefined;
 
-function options(folder: vscode.WorkspaceFolder): ProjectOptions & { lspPath: string } {
+function options(
+  folder: vscode.WorkspaceFolder,
+  provider: LanguageEngineProvider,
+): ProjectOptions & { lspPath: string } {
   const settings = vscode.workspace.getConfiguration("dryas", folder.uri);
   return {
     projectRoot: folder.uri.fsPath,
@@ -61,13 +66,13 @@ function options(folder: vscode.WorkspaceFolder): ProjectOptions & { lspPath: st
         settings.get<string>("apiPath", "sysml-grpc") === "sysml-grpc"
           ? (process.env.DRYAS_API_PATH ?? "sysml-grpc")
           : settings.get<string>("apiPath")!,
-      expectedVersion: settings.get<string>("expectedEngineVersion", ENGINE_VERSION),
+      expectedVersion: settings.get<string>("expectedEngineVersion", provider.defaultEngineVersion),
       timeoutMs: settings.get<number>("requestTimeoutMs", 30000),
     },
   };
 }
 
-class Manager {
+export class Manager {
   private readonly projects = new Map<string, RunningProject>();
   private readonly libraries = new Map<string, StdlibDocuments>();
   private readonly attempted = new Map<string, ProjectConfig>();
@@ -88,7 +93,11 @@ class Manager {
   );
   private disposed = false;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly provider: LanguageEngineProvider = DEFAULT_LANGUAGE_ENGINE_PROVIDER,
+  ) {
+    assertLanguageEngineProvider(provider);
     this.statusBar.name = "DRYAS language service";
     this.statusBar.command = "dryas.showLanguageServiceStatus";
     context.subscriptions.push(
@@ -136,12 +145,12 @@ class Manager {
     if (existing) return existing;
     // Persist an opaque identity in editor workspace storage so restored tabs
     // retain their owning project without exposing its filesystem path in URIs.
-    const stateKey = `dryas.stdlib.${key}`;
+    const stateKey = `${this.provider.languageService.standardLibrary.storageKeyPrefix}.${key}`;
     const saved = this.context.workspaceState.get<string>(stateKey);
     const scheme =
       saved && /^dryas-stdlib-[a-f0-9-]{36}$/.test(saved) ? saved : `dryas-stdlib-${randomUUID()}`;
     if (scheme !== saved) await this.context.workspaceState.update(stateKey, scheme);
-    const library = new StdlibDocuments(scheme);
+    const library = new StdlibDocuments(scheme, this.provider.languageService.standardLibrary);
     this.libraries.set(key, library);
     return library;
   }
@@ -211,7 +220,7 @@ class Manager {
     for (const folder of folders) {
       if (this.disposed) break;
       const key = folder.uri.toString();
-      const config = options(folder);
+      const config = options(folder, this.provider);
       const previous = this.attempted.get(key);
       const changed = !previous || !sameConfig(previous, config);
       const recovering = this.pendingRecovery.delete(key);
@@ -222,16 +231,48 @@ class Manager {
           this.attempted.set(key, config);
           try {
             checkExecutableSetting(config.engine.executable, "dryas.apiPath");
+            const replacement = new ProjectSession(
+              config,
+              createLanguageBackend(this.provider, config.engine),
+            );
             current.session.close();
-            current.session = new ProjectSession(config);
+            current.session = replacement;
             current.config = config;
             this.output.info(
               `Project ${folder.index + 1}: saved-validation settings updated; language-server connection retained.`,
             );
           } catch (error) {
             const details = startupError(error, "configuration");
-            this.output.error(`Project ${folder.index + 1}: ${details.code}: ${details.message}`);
+            const message =
+              "Saved-validation settings could not be applied. The language server remains connected and the previous saved-validation settings are still in use.";
+            const status = this.statuses.get(key);
+            if (status)
+              this.setStatus(key, {
+                ...status,
+                stage: "saved-validation-configuration",
+                errorCode: details.code,
+                message,
+              });
+            this.output.error(
+              `Project ${folder.index + 1}: ${details.code}: ${details.message} ${message}`,
+            );
           }
+        }
+        // A successful replacement or a return to the last working settings
+        // clears the saved-validation warning without restarting the LSP.
+        const status = this.statuses.get(key);
+        if (
+          sameConfig(current.config, config) &&
+          status?.stage === "saved-validation-configuration"
+        ) {
+          const updated = { ...status };
+          delete updated.errorCode;
+          this.setStatus(key, {
+            ...updated,
+            stage: "connected",
+            message:
+              "Language server connected. Initial indexing may still be running; the engine does not report index completion.",
+          });
         }
         this.attempted.set(key, config);
         continue;
@@ -265,6 +306,9 @@ class Manager {
       `Project ${base.project}: starting language service (attempt ${generation}; reason: ${reason}).`,
     );
     let record: RunningProject | undefined;
+    let session: ProjectSession | undefined;
+    let client: LanguageClient | undefined;
+    const watchers: vscode.FileSystemWatcher[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       checkExecutableSetting(config.lspPath, "dryas.lspPath");
@@ -282,26 +326,30 @@ class Manager {
         stage,
         message: "Checking the language-server version.",
       });
-      await verifyLanguageServer(config);
+      await verifyLanguageServer(config, this.provider.languageService);
       if (this.disposed) return;
       const library = await this.libraryFor(key);
-      const watchers = snapshot.roots.map((root) =>
-        vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(root, "**/*.{sysml,kerml}"),
-        ),
-      );
+      stage = "configuration";
+      session = new ProjectSession(config, createLanguageBackend(this.provider, config.engine));
+      stage = "lsp-initialize";
+      for (const root of snapshot.roots)
+        watchers.push(
+          vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(root, "**/*.{sysml,kerml}"),
+          ),
+        );
       const modelFolder = {
         uri: vscode.Uri.file(snapshot.roots[0]!),
         name: folder.name,
         index: folder.index,
       };
-      const client = new LanguageClient(
+      client = new LanguageClient(
         `dryas-${folder.index}`,
         "DRYAS SysML",
         () =>
           new Promise<ChildProcess>((resolve, reject) => {
-            const child = spawn(config.lspPath, ["-strict", "-no-record-cache"], {
-              env: engineEnvironment(),
+            const child = spawn(config.lspPath, [...this.provider.languageService.launch.args], {
+              env: this.provider.languageService.launch.environment(),
               windowsHide: true,
               shell: false,
               stdio: ["pipe", "pipe", "pipe"],
@@ -337,7 +385,13 @@ class Manager {
           },
         },
       );
-      record = { client, session: new ProjectSession(config), watchers, config, stopping: false };
+      record = {
+        client,
+        session,
+        watchers,
+        config,
+        stopping: false,
+      };
       this.projects.set(key, record);
       stage = "lsp-initialize";
       this.setStatus(key, {
@@ -392,7 +446,16 @@ class Manager {
       );
     } catch (error) {
       const details = record?.failed ?? startupError(error, stage);
-      await this.stopProject(key, "startup-failed");
+      if (record) {
+        await this.stopProject(key, "startup-failed");
+      } else {
+        // A factory or constructor can fail before a project record exists.
+        // Retire every successfully allocated resource in that partial startup.
+        session?.close();
+        watchers.forEach((watcher) => watcher.dispose());
+        await client?.stop(1000).catch(() => undefined);
+        this.libraries.get(key)?.detach();
+      }
       this.setStatus(key, {
         ...base,
         connection: "error",
@@ -484,7 +547,7 @@ class Manager {
       return;
     }
     try {
-      checkExecutableSetting(options(folder).engine.executable, "dryas.apiPath");
+      checkExecutableSetting(options(folder, this.provider).engine.executable, "dryas.apiPath");
     } catch (error) {
       void vscode.window.showErrorMessage(publicError(error).message);
       return;
@@ -517,7 +580,7 @@ class Manager {
   private async showMcpConfiguration(): Promise<void> {
     const folder = await this.chooseFolder();
     if (!folder) return;
-    const config = options(folder);
+    const config = options(folder, this.provider);
     const args = [
       join(this.context.extensionPath, "dist", "mcp.cjs"),
       "--project",

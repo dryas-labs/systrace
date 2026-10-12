@@ -2,10 +2,10 @@
 
 **English** | [简体中文](README.zh-Hans.md)
 
-SysML v2 editing for VS Code and Cursor, powered by an external OpenSysML engine.
-This is an early development extension. View rendering and a built-in agent are future work.
+SysML v2 editing for VS Code and Cursor, powered by an external language engine.
+This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.5 uses OpenSysML `v0.9.2-dryas.4`. Selected completion details show
+Version 0.1.5 uses language engine build `v0.9.2-dryas.4`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
@@ -14,11 +14,11 @@ Use the details arrow, or Ctrl+Space while the suggestion list is open, to expan
 the editor's native detail panel. Update both external engine executables; if
 you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.4`.
 
-See the [engine support policy](../../docs/engine-support.md). The configured DRYAS build is the tested backend; upstream compatibility remains a goal, not a guarantee for arbitrary versions.
+See [Language engine](../../docs/language-engine.md) for the current selection.
 
 ## Getting started
 
-1. Build the maintained OpenSysML version described in the repository's `config/engine.json`.
+1. Build the configured language engine version described in the repository's `config/engine.json`.
 2. Put `sysml-lsp` and `sysml-grpc` on PATH, or set **DRYAS: Lsp Path** and
    **DRYAS: Api Path** in your editor's **User Settings**. Keep machine paths out of committed workspace settings.
 3. Open a trusted project folder with SysML/KerML files under `model/`, or configure

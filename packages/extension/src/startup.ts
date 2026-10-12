@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { AdapterError, engineEnvironment, type ProjectOptions } from "@dryas/engine-adapter";
+import {
+  AdapterError,
+  type LanguageServiceBackend,
+  type ProjectOptions,
+} from "@dryas/engine-adapter";
 
 export type ProjectConfig = ProjectOptions & { lspPath: string };
 export type StartupStage = "configuration" | "model-folders" | "version-check" | "lsp-initialize";
@@ -64,15 +68,18 @@ export function startupError(error: unknown, stage: StartupStage): AdapterError 
   );
 }
 
-export async function verifyLanguageServer(config: ProjectConfig): Promise<void> {
+export async function verifyLanguageServer(
+  config: ProjectConfig,
+  backend: LanguageServiceBackend,
+): Promise<void> {
   try {
-    const version = await promisify(execFile)(config.lspPath, ["-version"], {
+    const version = await promisify(execFile)(config.lspPath, [...backend.version.args], {
       windowsHide: true,
       timeout: Math.min(config.engine.timeoutMs ?? 30000, 10000),
-      env: engineEnvironment(),
+      env: backend.launch.environment(),
       maxBuffer: 64 * 1024,
     });
-    if (version.stdout.split(/\r?\n/)[0] !== `sysml-lsp ${config.engine.expectedVersion}`)
+    if (!backend.version.matchesOutput(version.stdout, config.engine.expectedVersion!))
       throw new AdapterError(
         "ENGINE_VERSION_MISMATCH",
         "The language server does not match dryas.expectedEngineVersion. Use the configured maintenance build.",
