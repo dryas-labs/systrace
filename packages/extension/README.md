@@ -5,14 +5,14 @@
 SysML v2 editing for VS Code and Cursor, powered by an external language engine.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.5 uses language engine build `v0.9.2-dryas.4`. Selected completion details show
+Version 0.1.6 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
 spelling; undocumented elements show their declaration and source only.
 Use the details arrow, or Ctrl+Space while the suggestion list is open, to expand
 the editor's native detail panel. Update both external engine executables; if
-you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.4`.
+you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.5`.
 
 See [Language engine](../../docs/language-engine.md) for the current selection.
 
