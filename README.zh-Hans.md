@@ -2,8 +2,8 @@
 
 [English](README.md) | **简体中文**
 
-DRYAS Systrace 面向系统工程建模与工程数字主线。第一阶段以 VS Code 扩展为主要交付物，
-同时适配 Cursor，通过 OpenSysML 提供 SysML v2 编辑能力，并通过 MCP 服务连接外部 agent。
+DRYAS Systrace 面向系统工程建模与工程数字主线。当前产品以 VS Code 扩展形式提供，
+同时适配 Cursor，通过 language engine（语言引擎）提供 SysML v2 编辑能力，并通过 MCP 服务连接外部 agent。
 
 当前开发版提供 LSP 接入和四个只读 MCP 工具：`validate`, `find_element`, `describe_element`, `library_lookup`。验证与项目查询使用已保存文件。目前未实现 view 渲染和内置 agent。这些工具不证明工程设计正确性或完整标准一致性。
 
@@ -16,7 +16,7 @@ npm ci
 npm run config:init
 ```
 
-编辑新生成的 **`config.js`**，填写本机的 OpenSysML 程序位置。它已被 `.gitignore` 排除，
+编辑新生成的 **`config.js`**，填写本机的 language engine 程序位置。它已被 `.gitignore` 排除，
 不要提交。仓库只跟踪 [config.example.js](config.example.js)，里面是通用默认值和字段说明。
 `config.js` 是本仓库开发脚本使用的可信本地 JavaScript 配置，不会从打开的模型项目中自动执行。
 
@@ -27,16 +27,16 @@ npm run package:vsix
 
 VSIX 输出在 `artifacts/`。在 VS Code 或 Cursor 中执行 **Extensions: Install from VSIX...** 安装。当前仓库不包含编辑器启动配置和示例项目。
 
-Systrace 优先支持已测试的 DRYAS OpenSysML 构建，并以上游兼容为目标。当前兼容边界、上游贡献政策及分发要求见[引擎支持政策](docs/engine-support.zh-Hans.md)。
+当前引擎选择见 [Language engine](docs/language-engine.zh-Hans.md)。
 
-## OpenSysML 引擎
+## Language engine
 
 [config/engine.json](config/engine.json) 记录开发引擎的版本和源码提交。
 本版 VSIX 使用外部的 `sysml-lsp` 与 `sysml-grpc`，不包含引擎二进制或标准库。
 0.1.5 使用 `v0.9.2-dryas.4`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
 源文件名和完整的 `doc`。升级时需要同时更新 VSIX 和两个外部引擎程序；如果手动填写过
 `dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.4`。
-有匹配的 Go 工具链时，可以运行：
+安装所配置 language engine 需要的构建工具链后，可以运行：
 
 ```sh
 node scripts/build-engine.mjs
@@ -82,14 +82,14 @@ LSP 可处理未保存内容；MCP 验证的是磁盘上的保存快照。诊断
 
 ## 开发检查
 
-| 命令                            | 内容                                                 |
-| ------------------------------- | ---------------------------------------------------- |
-| `npm run check`                 | 本机信息检查、格式、lint、类型、构建和适配层单元测试 |
-| `npm run test:engine`           | 真实 OpenSysML 多文件验证及 MCP stdio 客户端测试     |
-| `npm run test:host`             | 隔离的 VS Code 扩展宿主测试                          |
-| `npm run test:host -- --cursor` | 使用 `config.js` 中指定的 Cursor，运行相同宿主测试   |
-| `npm run watch`                 | 持续构建开发代码                                     |
-| `npm run package:vsix`          | 构建并生成开发版 VSIX                                |
+| 命令                            | 内容                                                   |
+| ------------------------------- | ------------------------------------------------------ |
+| `npm run check`                 | 本机信息检查、格式、lint、类型、构建和适配层单元测试   |
+| `npm run test:engine`           | 真实 language engine 多文件验证及 MCP stdio 客户端测试 |
+| `npm run test:host`             | 隔离的 VS Code 扩展宿主测试                            |
+| `npm run test:host -- --cursor` | 使用 `config.js` 中指定的 Cursor，运行相同宿主测试     |
+| `npm run watch`                 | 持续构建开发代码                                       |
+| `npm run package:vsix`          | 构建并生成开发版 VSIX                                  |
 
 宿主测试加 `--vsix` 时，会先把已打包的 VSIX 安装到隔离配置，再测试包内代码。
 例如 `npm run test:host -- --cursor --vsix`。
@@ -112,4 +112,4 @@ GitHub Actions 会在 PR 和推送到 `main` 时，在 Windows 与 Linux 上执�
 DRYAS 自有代码采用 [Apache License 2.0](LICENSE)。源码中的
 `SPDX-License-Identifier: Apache-2.0` 标记该文件的许可证。
 构建根据实际打包的 JavaScript 依赖生成 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
-并将许可证与声明放入 VSIX。外部 OpenSysML 及其标准库的许可证与发布清单另行管理。
+并将许可证与声明放入 VSIX。外部 language engine 及其标准库的许可证与发布清单另行管理。

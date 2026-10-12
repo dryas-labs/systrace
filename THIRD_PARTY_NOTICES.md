@@ -1,7 +1,7 @@
 # Third-party notices
 
 Generated from dependencies included in the extension and MCP bundles.
-OpenSysML is configured as an external executable and is not included in this VSIX.
+The language engine is configured as an external executable and is not included in this VSIX.
 
 ## @modelcontextprotocol/sdk 1.32.1
 

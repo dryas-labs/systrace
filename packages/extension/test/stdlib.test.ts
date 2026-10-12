@@ -80,12 +80,17 @@ vi.mock("vscode", () => ({
 
 import * as vscode from "vscode";
 import { StdlibDocuments } from "../src/stdlib.js";
+import { DEFAULT_LANGUAGE_ENGINE_PROVIDER } from "@dryas/engine-adapter";
+import { TEST_LANGUAGE_SERVICE } from "./language-service-fixture.js";
 
 const engineUri =
   "sysml-stdlib:/Domain%20Libraries/Quantities%20and%20Units/ISQElectromagnetism.sysml";
 const providers: StdlibDocuments[] = [];
 function make(scheme = "dryas-stdlib-test-one", text = "attribute voltage;") {
-  const provider = new StdlibDocuments(scheme);
+  const provider = new StdlibDocuments(
+    scheme,
+    DEFAULT_LANGUAGE_ENGINE_PROVIDER.languageService.standardLibrary,
+  );
   providers.push(provider);
   const request = vi.fn(
     async (
@@ -217,4 +222,33 @@ it("bounds a stalled library read by the configured timeout", async () => {
   await vi.advanceTimersByTimeAsync(100);
   await rejected;
   expect(request.mock.calls[0]![2].isCancellationRequested).toBe(true);
+});
+
+it("translates a different engine's library scheme, capability, request and payload", async () => {
+  const provider = new StdlibDocuments(
+    "dryas-stdlib-fixture",
+    TEST_LANGUAGE_SERVICE.standardLibrary,
+  );
+  providers.push(provider);
+  const request = vi.fn(async () => ({ source: "package Fixture;" }));
+  const client = {
+    initializeResult: { capabilities: { fixtureLibrary: true } },
+    sendRequest: request,
+  } as unknown as Pick<LanguageClient, "initializeResult" | "sendRequest">;
+  expect(provider.attach(client, 100)).toBe(true);
+  const nativeUri = "fixture-library:/Library%20Folder/Fixture.sysml";
+  const uri = provider.uriConverters.protocol2Code(nativeUri);
+  expect(uri.scheme).toBe("dryas-stdlib-fixture");
+  expect(provider.uriConverters.code2Protocol(uri)).toBe(nativeUri);
+  const token = new vscode.CancellationTokenSource();
+  expect(await provider.provideTextDocumentContent(uri, token.token)).toBe("package Fixture;");
+  expect(request).toHaveBeenCalledWith(
+    "fixture/librarySource",
+    { document: nativeUri },
+    expect.anything(),
+  );
+  // Advertising another engine's private capability must not enable this protocol.
+  client.initializeResult!.capabilities = { experimental: { openSysmlStdlibContent: true } };
+  expect(provider.attach(client, 100)).toBe(false);
+  token.dispose();
 });

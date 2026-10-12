@@ -79,7 +79,7 @@ for (const result of results.slice(0, -1))
     packages.add(parts.slice(0, end).join("/"));
   }
 let notices =
-  "# Third-party notices\n\nGenerated from dependencies included in the extension and MCP bundles.\nOpenSysML is configured as an external executable and is not included in this VSIX.\n\n";
+  "# Third-party notices\n\nGenerated from dependencies included in the extension and MCP bundles.\nThe language engine is configured as an external executable and is not included in this VSIX.\n\n";
 const seen = new Map();
 for (const path of [...packages].sort()) {
   const folder = join(root, path);

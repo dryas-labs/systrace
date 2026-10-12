@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readSnapshot } from "@dryas/engine-adapter";
+import { DEFAULT_LANGUAGE_ENGINE_PROVIDER, readSnapshot } from "@dryas/engine-adapter";
 import {
   checkExecutableSetting,
   sameConfig,
@@ -12,6 +12,8 @@ import {
   verifyLanguageServer,
   type ProjectConfig,
 } from "../src/startup.js";
+
+import { TEST_LANGUAGE_SERVICE } from "./language-service-fixture.js";
 
 const config: ProjectConfig = {
   projectRoot: "project",
@@ -87,9 +89,27 @@ it("does not restart the LSP for an API-only change but catches model-root chang
 
 it("identifies a missing executable through a real spawn failure", async () => {
   await expect(
-    verifyLanguageServer({
-      ...config,
-      lspPath: "dryas-test-nonexistent-language-server-executable",
-    }),
+    verifyLanguageServer(
+      { ...config, lspPath: "dryas-test-nonexistent-language-server-executable" },
+      DEFAULT_LANGUAGE_ENGINE_PROVIDER.languageService,
+    ),
   ).rejects.toMatchObject({ code: "ENGINE_NOT_FOUND" });
+});
+
+it("uses the injected version command, output format and environment in a real process", async () => {
+  const alternate = {
+    ...config,
+    lspPath: process.execPath,
+    engine: { ...config.engine, expectedVersion: "fixture-build" },
+  };
+  await expect(verifyLanguageServer(alternate, TEST_LANGUAGE_SERVICE)).resolves.toBeUndefined();
+  await expect(
+    verifyLanguageServer(
+      {
+        ...alternate,
+        engine: { ...alternate.engine, expectedVersion: "wrong-build" },
+      },
+      TEST_LANGUAGE_SERVICE,
+    ),
+  ).rejects.toMatchObject({ code: "ENGINE_VERSION_MISMATCH" });
 });
