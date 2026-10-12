@@ -19,7 +19,7 @@ const config: ProjectConfig = {
   projectRoot: "project",
   modelRoots: ["model"],
   lspPath: "sysml-lsp",
-  engine: { executable: "sysml-grpc", expectedVersion: "v0.9.2-dryas.4", timeoutMs: 30000 },
+  engine: { executable: "sysml-grpc", expectedVersion: "v0.9.2-dryas.5", timeoutMs: 30000 },
 };
 
 it("explains missing default roots and accepts explicitly configured nested source folders", async () => {

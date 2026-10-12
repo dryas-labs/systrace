@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -115,7 +115,7 @@
         },
         "dryas.expectedEngineVersion": {
           "type": "string",
-          "default": "v0.9.2-dryas.4",
+          "default": "v0.9.2-dryas.5",
           "scope": "resource",
           "description": "Required language engine build version, checked before use."
         },

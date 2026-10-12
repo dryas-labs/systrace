@@ -12,7 +12,7 @@ const connection = createMessageConnection(
   new StreamMessageWriter(process.stdout),
 );
 connection.onRequest("GetServerInfo", () => ({
-  version: mode === "wrong-version" ? "other" : "v0.9.2-dryas.4",
+  version: mode === "wrong-version" ? "other" : "v0.9.2-dryas.5",
   capabilities:
     mode === "missing-capability" ? [] : ["parse_sources", "strict_conformance", "inline_language"],
 }));

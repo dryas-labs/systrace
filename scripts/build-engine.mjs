@@ -20,6 +20,15 @@ const repositoryRoot = execFileSync("git", ["-C", source, "rev-parse", "--show-t
 if ((await realpath(repositoryRoot)) !== (await realpath(source)))
   throw new Error("The engine source directory must be its own Git checkout.");
 git("-C", source, "config", "--local", "core.autocrlf", "false");
+// Fetch a newly selected revision when the reusable checkout does not have it.
+try {
+  execFileSync("git", ["-C", source, "cat-file", "-e", `${manifest.commit}^{commit}`], {
+    windowsHide: true,
+    stdio: "ignore",
+  });
+} catch {
+  git("-C", source, "fetch", "--no-tags", "origin", manifest.commit);
+}
 git("-C", source, "checkout", "--detach", manifest.commit);
 const head = execFileSync("git", ["-C", source, "rev-parse", "HEAD"], {
   encoding: "utf8",
@@ -36,7 +45,7 @@ for (const name of ["sysml-lsp", "sysml-grpc"]) {
     [
       "build",
       "-trimpath",
-      `-ldflags=-X main.Version=${manifest.version}`,
+      `-ldflags=-X main.Version=${manifest.version} -X main.Commit=${manifest.commit}`,
       "-o",
       output,
       `./cmd/${name}`,
