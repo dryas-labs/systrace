@@ -78,10 +78,19 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
       vscode.window.createTreeView("systrace.projects", { treeDataProvider: this }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.refresh()),
       vscode.commands.registerCommand("dryas.createProject", () => this.create()),
-      vscode.commands.registerCommand("dryas.newNamespace", (node?: ProjectNode) =>
+      // Title actions receive the focused tree element from the editor. A tree
+      // element is not an explicit resource argument or a creation destination.
+      vscode.commands.registerCommand("dryas.newNamespace", () => this.newNamespace()),
+      vscode.commands.registerCommand("dryas.newNamespaceInFolder", (node: ProjectNode) =>
         this.newNamespace(node),
       ),
-      vscode.commands.registerCommand("dryas.openProject", (uri?: vscode.Uri) => this.open(uri)),
+      vscode.commands.registerCommand("dryas.openProject", (argument?: unknown) => {
+        const uri =
+          argument && typeof argument === "object" && "scheme" in argument && "fsPath" in argument
+            ? (argument as vscode.Uri)
+            : undefined;
+        return this.open(uri);
+      }),
       vscode.commands.registerCommand("dryas.selectProject", (folder?: vscode.WorkspaceFolder) =>
         this.select(folder),
       ),

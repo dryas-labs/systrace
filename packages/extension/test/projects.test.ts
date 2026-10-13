@@ -213,7 +213,7 @@ it("creates a namespace in the clicked project's source folder without switching
   };
   await projects.open(host.uri(b) as unknown as import("vscode").Uri);
   host.names.push("Electrical");
-  await host.commands.get("dryas.newNamespace")!(target);
+  await host.commands.get("dryas.newNamespaceInFolder")!(target);
   const file = join(a, "design", "Electrical.sysml");
   expect(await readFile(file, "utf8")).toBe("package 'Electrical' {\n\n}\n");
   expect(host.opened).toEqual([file]);
@@ -243,4 +243,29 @@ it("uses the chosen source root for project-level namespace creation and cancels
   await expect(access(join(root, "requirements", "Cancelled.sysml"))).rejects.toMatchObject({
     code: "ENOENT",
   });
+});
+
+it("opens the folder picker when the title-bar command supplies a selected tree node instead of a URI", async () => {
+  const folder = join(root, "ToolbarProject");
+  await mkdir(folder);
+  host.dialogs.push([host.uri(folder)]);
+  const focused = {
+    nodeType: "file",
+    uri: host.uri(join(root, "selected.sysml")),
+    label: "selected.sysml",
+  };
+  await host.commands.get("dryas.openProject")!(focused, [focused]);
+  expect(projects.current?.uri.fsPath).toBe(folder);
+  expect(host.dialogs).toHaveLength(0);
+  expect(host.errors).toEqual([]);
+});
+
+it("uses the current project when New Namespace is invoked from the title bar", async () => {
+  await projects.open(host.uri(root) as unknown as import("vscode").Uri);
+  host.names.push("FromToolbar");
+  const focused = { nodeType: "namespace", uri: { scheme: "library" }, label: "SI" };
+  await host.commands.get("dryas.newNamespace")!(focused, [focused]);
+  expect(await readFile(join(root, "FromToolbar.sysml"), "utf8")).toContain(
+    "package 'FromToolbar'",
+  );
 });
