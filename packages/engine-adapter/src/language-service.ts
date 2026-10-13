@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
+export interface LibraryCatalogEntry {
+  name: string;
+  uri: string;
+  range: { start: { line: number; character: number }; end: { line: number; character: number } };
+}
+export interface LibraryCatalogTransport {
+  request(method: string, params: unknown): Promise<unknown>;
+  notify(method: string, params: unknown): Promise<void>;
+}
+
 /** Native standard-library protocol, translated at the language-engine boundary. */
 export interface LibraryDocumentProtocol {
   readonly scheme: string;
@@ -8,6 +18,8 @@ export interface LibraryDocumentProtocol {
   supports(capabilities: unknown): boolean;
   request(uri: string): { method: string; params: unknown };
   decode(result: unknown): string | undefined;
+  /** Optional discovery through the engine; never a bundled, hard-coded library inventory. */
+  catalog?(transport: LibraryCatalogTransport, scratchUri: string): Promise<LibraryCatalogEntry[]>;
 }
 
 /** LSP process and optional library access. No editor or model-execution dependency. */

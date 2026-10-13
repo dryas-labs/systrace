@@ -5,7 +5,7 @@
 SysML v2 editing for VS Code and Cursor, powered by an external language engine.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.7 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
+Version 0.1.8 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
@@ -94,7 +94,7 @@ Legal texts and third-party notices retain their original wording.
 
 ## Projects
 
-The **Systrace Projects** view in the Explorer lists the workspace's local project folders.
+The **Projects** view in the dedicated **Systrace** sidebar lists the workspace's local project folders.
 Use **New Systrace Project** to choose a name and parent directory, or **Open Systrace Project**
 to add an existing folder. Each folder is a project root. Click a project to make it the
 default target for saved validation and MCP configuration; switching editor tabs does not
@@ -122,3 +122,18 @@ MCP tools are unchanged. Keep generated configurations containing local paths ou
 
 For an isolated two-project check, run `npm run test:host -- --projects --vsix`; add `--cursor`
 to run the same check in the configured Cursor installation.
+
+## Project tree
+
+Click **Systrace** in the Activity Bar to open its dedicated sidebar, separate from
+Explorer. Expand a project to browse configured **Sources** and the read-only
+**Standard Library**. Source folders contain `.sysml` / `.kerml` files; expand a
+file for the declaration hierarchy returned by the language engine. Click an
+element to navigate to its source. Unsaved edits refresh the outline; file creation
+and deletion refresh the folders. A refresh action is also available in the title bar.
+
+Library discovery is lazy and lists library namespaces the engine exposes in the
+current project context. Expand them for declared members and read-only source.
+Name shadowing can affect the visible catalogue; imports and re-exports are not
+expanded as duplicate declarations. Type labels use only engine-supplied information.
+Browsing another project or a library does not rebind an existing agent conversation.

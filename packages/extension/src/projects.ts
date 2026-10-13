@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
+import {
+  ProjectTree,
+  isContentNode,
+  type ProjectBrowser,
+  type ProjectNode,
+} from "./project-tree.js";
 import { mkdir, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 
@@ -30,20 +36,31 @@ export function overlappingRoots(first: string, second: string): boolean {
 }
 
 /** Workspace folders are projects; selection is explicit and never follows editor focus. */
-export class Projects
-  implements vscode.TreeDataProvider<vscode.WorkspaceFolder>, vscode.Disposable
-{
-  private readonly changed = new vscode.EventEmitter<vscode.WorkspaceFolder | undefined>();
+export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Disposable {
+  private readonly changed = new vscode.EventEmitter<ProjectNode | undefined>();
   readonly onDidChangeTreeData = this.changed.event;
   private selected: string | undefined;
+  private readonly contents: ProjectTree | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly status: (folder: vscode.WorkspaceFolder) => ProjectStatus | undefined,
     private readonly selectionChanged: () => void,
+    browser?: ProjectBrowser,
   ) {
     this.selected = context.workspaceState.get<string>("dryas.currentProject");
+    if (browser) {
+      this.contents = new ProjectTree(browser, (node) => this.changed.fire(node));
+      this.disposables.push(this.contents);
+    }
+    this.disposables.push(
+      vscode.commands.registerCommand("dryas.refreshProjects", () => {
+        browser?.refreshLibraries();
+        this.contents?.refresh();
+        this.refresh();
+      }),
+    );
     this.disposables.push(
       vscode.window.createTreeView("systrace.projects", { treeDataProvider: this }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.refresh()),
@@ -70,12 +87,18 @@ export class Projects
     );
   }
 
-  getChildren(): vscode.WorkspaceFolder[] {
-    return [...this.folders];
+  getChildren(node?: ProjectNode): vscode.ProviderResult<ProjectNode[]> {
+    return node ? (this.contents?.children(node) ?? []) : [...this.folders];
   }
 
-  getTreeItem(folder: vscode.WorkspaceFolder): vscode.TreeItem {
-    const item = new vscode.TreeItem(folder.name, vscode.TreeItemCollapsibleState.None);
+  getParent(node: ProjectNode): ProjectNode | undefined {
+    return isContentNode(node) ? node.parent : undefined;
+  }
+
+  getTreeItem(node: ProjectNode): vscode.TreeItem {
+    if (isContentNode(node)) return this.contents!.item(node);
+    const folder = node;
+    const item = new vscode.TreeItem(folder.name, vscode.TreeItemCollapsibleState.Collapsed);
     item.id = folder.uri.toString();
     item.contextValue = "systraceProject";
     item.iconPath = new vscode.ThemeIcon("project");

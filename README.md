@@ -38,7 +38,7 @@ See [Language engine](docs/language-engine.md) for the current selection.
 source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
 it does not bundle the engine or its standard library.
 
-Version 0.1.7 uses `v0.9.2-dryas.5`. Selected completion details show the native
+Version 0.1.8 uses `v0.9.2-dryas.5`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
 complete `doc`. Update the VSIX and both external executables together. If you
 set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.5` too.
@@ -141,7 +141,7 @@ library are managed separately.
 
 ## Projects
 
-The **Systrace Projects** view in the Explorer lists the workspace's local project folders.
+The **Projects** view in the dedicated **Systrace** sidebar lists the workspace's local project folders.
 Use **New Systrace Project** to choose a name and parent directory, or **Open Systrace Project**
 to add an existing folder. Each folder is a project root. Click a project to make it the
 default target for saved validation and MCP configuration; switching editor tabs does not
@@ -169,3 +169,18 @@ MCP tools are unchanged. Keep generated configurations containing local paths ou
 
 For an isolated two-project check, run `npm run test:host -- --projects --vsix`; add `--cursor`
 to run the same check in the configured Cursor installation.
+
+## Project tree
+
+Click **Systrace** in the Activity Bar to open its dedicated sidebar, separate from
+Explorer. Expand a project to browse configured **Sources** and the read-only
+**Standard Library**. Source folders contain `.sysml` / `.kerml` files; expand a
+file for the declaration hierarchy returned by the language engine. Click an
+element to navigate to its source. Unsaved edits refresh the outline; file creation
+and deletion refresh the folders. A refresh action is also available in the title bar.
+
+Library discovery is lazy and lists library namespaces the engine exposes in the
+current project context. Expand them for declared members and read-only source.
+Name shadowing can affect the visible catalogue; imports and re-exports are not
+expanded as duplicate declarations. Type labels use only engine-supplied information.
+Browsing another project or a library does not rebind an existing agent conversation.

@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -111,6 +111,11 @@
         "command": "dryas.configureModelRoots",
         "title": "DRYAS: Configure Model Source Folders",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "dryas.refreshProjects",
+        "title": "DRYAS: Refresh Projects",
+        "icon": "$(refresh)"
       }
     ],
     "configuration": {
@@ -156,10 +161,10 @@
       }
     },
     "views": {
-      "explorer": [
+      "systrace": [
         {
           "id": "systrace.projects",
-          "name": "Systrace Projects"
+          "name": "Projects"
         }
       ]
     },
@@ -178,6 +183,11 @@
         },
         {
           "command": "dryas.openProject",
+          "when": "view == systrace.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "dryas.refreshProjects",
           "when": "view == systrace.projects",
           "group": "navigation"
         }
@@ -214,6 +224,15 @@
           "command": "dryas.openProject",
           "when": "explorerResourceIsFolder && resourceScheme == file",
           "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "systrace",
+          "title": "Systrace",
+          "icon": "media/systrace.svg"
         }
       ]
     }

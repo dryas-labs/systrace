@@ -5,6 +5,7 @@
 !LICENSE
 !THIRD_PARTY_NOTICES.md
 !language-configuration.json
+!media/systrace.svg
 !dist/extension.cjs
 !dist/mcp.cjs
 **/*.map

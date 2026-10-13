@@ -24,7 +24,11 @@ if (projectChecks) {
   const b = resolve(workspace, "ProjectB");
   await mkdir(resolve(a, "design"), { recursive: true });
   await mkdir(resolve(b, "library"), { recursive: true });
-  await writeFile(resolve(a, "definitions.sysml"), "package Components { part def Battery; }\n");
+  await writeFile(
+    resolve(a, "definitions.sysml"),
+    "package Components {\n  port def PowerPort;\n  part def Battery {\n    port output : PowerPort;\n  }\n}\n",
+  );
+  await writeFile(resolve(a, "notes.md"), "Not a model source.\n");
   await writeFile(
     resolve(a, "design/system.sysml"),
     "package System { private import Components::*; part battery : Battery; }\n",

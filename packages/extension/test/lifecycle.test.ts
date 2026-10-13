@@ -134,6 +134,14 @@ vi.mock("vscode-languageclient/node", () => ({
   },
 }));
 
+vi.mock("../src/project-tree.js", async (original) => ({
+  ...(await original<typeof import("../src/project-tree.js")>()),
+  ProjectTree: class {
+    refresh() {}
+    dispose() {}
+  },
+}));
+
 vi.mock("../src/stdlib.js", () => ({
   StdlibDocuments: class {
     attach = vi.fn(() => true);

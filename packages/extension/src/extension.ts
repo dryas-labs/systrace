@@ -5,7 +5,12 @@ import { join, relative, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import { Projects, overlappingRoots } from "./projects.js";
-import { LanguageClient, CloseAction, ErrorAction } from "vscode-languageclient/node";
+import {
+  LanguageClient,
+  CloseAction,
+  ErrorAction,
+  DocumentSymbolRequest,
+} from "vscode-languageclient/node";
 import {
   ProjectSession,
   readSnapshot,
@@ -106,6 +111,31 @@ export class Manager {
       context,
       (folder) => this.statuses.get(folder.uri.toString()),
       () => this.updateStatusBar(),
+      {
+        symbols: (folder, uri) => this.documentSymbols(folder, uri),
+        libraries: async (folder) => {
+          this.runningProject(folder);
+          const library = this.libraries.get(folder.uri.toString());
+          if (!library)
+            throw new AdapterError(
+              "QUERY_UNAVAILABLE",
+              "Library browsing is not ready. Refresh after the language service connects.",
+            );
+          try {
+            return await library.namespaces(
+              vscode.Uri.file(
+                join(context.globalStorageUri.fsPath, `library-query-${randomUUID()}.sysml`),
+              ).toString(),
+            );
+          } catch {
+            throw new AdapterError(
+              "QUERY_UNAVAILABLE",
+              "The language service could not list library namespaces. Refresh to retry.",
+            );
+          }
+        },
+        refreshLibraries: () => this.libraries.forEach((library) => library.clearCatalog()),
+      },
     );
     this.statusBar.name = "DRYAS language service";
     this.statusBar.command = "dryas.showLanguageServiceStatus";
@@ -150,6 +180,62 @@ export class Manager {
 
   refresh(reason: RefreshReason, delay = 0): Promise<void> {
     return this.refreshQueue.request(reason, delay);
+  }
+
+  getProjectTree(): Projects {
+    return this.projectUi;
+  }
+
+  private runningProject(folder: vscode.WorkspaceFolder): RunningProject {
+    const running = this.projects.get(folder.uri.toString());
+    if (
+      !running ||
+      running.failed ||
+      this.statuses.get(folder.uri.toString())?.connection !== "connected"
+    )
+      throw new AdapterError(
+        "QUERY_UNAVAILABLE",
+        "The language service is not ready. Refresh after it connects.",
+      );
+    return running;
+  }
+
+  private async documentSymbols(
+    folder: vscode.WorkspaceFolder,
+    uri: vscode.Uri,
+  ): Promise<(vscode.DocumentSymbol | vscode.SymbolInformation)[]> {
+    const running = this.runningProject(folder);
+    const document = await vscode.workspace.openTextDocument(uri);
+    const provider = running.client.getFeature(DocumentSymbolRequest.method).getProvider(document);
+    if (!provider)
+      throw new AdapterError(
+        "UNSUPPORTED_CAPABILITY",
+        "This language service cannot browse document declarations.",
+      );
+    const cancellation = new vscode.CancellationTokenSource();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const symbols = await Promise.race([
+        provider.provideDocumentSymbols(document, cancellation.token),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            cancellation.cancel();
+            reject(
+              new AdapterError("TIMEOUT", "Loading declarations exceeded the request deadline."),
+            );
+          }, running.config.engine.timeoutMs ?? 30000);
+        }),
+      ]);
+      if (this.projects.get(folder.uri.toString()) !== running)
+        throw new AdapterError(
+          "QUERY_UNAVAILABLE",
+          "The language service changed. Refresh the project tree.",
+        );
+      return symbols ?? [];
+    } finally {
+      clearTimeout(timer);
+      cancellation.dispose();
+    }
   }
 
   getStatus(): ServiceStatus[] {
@@ -416,6 +502,11 @@ export class Manager {
         {
           workspaceFolder: modelFolder,
           uriConverters: library.uriConverters,
+          middleware: {
+            handleDiagnostics: (uri, diagnostics, next) => {
+              if (!library.isInternalUri(uri)) next(uri, diagnostics);
+            },
+          },
           documentSelector: [
             ...snapshot.roots.flatMap((root) =>
               ["sysml", "kerml"].map((language) => ({
@@ -715,11 +806,14 @@ export class Manager {
 
 export async function activate(
   context: vscode.ExtensionContext,
-): Promise<{ getLanguageServiceStatus: () => ServiceStatus[] }> {
+): Promise<{ getLanguageServiceStatus: () => ServiceStatus[]; getProjectTree: () => Projects }> {
   manager = new Manager(context);
   await manager.refresh("activation");
   const current = manager;
-  return { getLanguageServiceStatus: () => current.getStatus() };
+  return {
+    getLanguageServiceStatus: () => current.getStatus(),
+    getProjectTree: () => current.getProjectTree(),
+  };
 }
 export async function deactivate(): Promise<void> {
   await manager?.dispose();

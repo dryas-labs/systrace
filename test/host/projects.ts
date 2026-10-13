@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
+import type { Projects } from "../../packages/extension/src/projects.js";
+import type { ContentNode } from "../../packages/extension/src/project-tree.js";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -23,7 +25,10 @@ export async function run(): Promise<void> {
   await extension.activate();
   const [a, b] = vscode.workspace.workspaceFolders ?? [];
   assert(a && b);
-  const state = extension.exports as { getLanguageServiceStatus(): { connection: string }[] };
+  const state = extension.exports as {
+    getLanguageServiceStatus(): { connection: string }[];
+    getProjectTree(): Projects;
+  };
   await eventually(
     async () => state.getLanguageServiceStatus(),
     (statuses) => statuses.length === 2 && statuses.every((s) => s.connection === "connected"),
@@ -64,6 +69,80 @@ export async function run(): Promise<void> {
         ),
     );
   }
+  // Exercise the installed tree provider, not a separate test-only reconstruction.
+  const tree = state.getProjectTree();
+  const manifest = extension.packageJSON;
+  assert.equal(manifest.contributes.views.systrace[0].id, "systrace.projects");
+  assert(!manifest.contributes.views.explorer);
+  await vscode.workspace.fs.stat(
+    vscode.Uri.joinPath(
+      extension.extensionUri,
+      manifest.contributes.viewsContainers.activitybar[0].icon,
+    ),
+  );
+  await vscode.commands.executeCommand("workbench.view.extension.systrace");
+  await vscode.commands.executeCommand("dryas.selectProject", a);
+  const children = async (
+    node: import("../../packages/extension/src/project-tree.js").ProjectNode,
+  ) => (await tree.getChildren(node)) as ContentNode[];
+  const groups = await children(a);
+  const sources = groups.find((node) => node.nodeType === "source");
+  const library = groups.find((node) => node.nodeType === "libraries");
+  assert(sources && library);
+  assert.equal(sources.label, "Sources · .");
+  const files = await children(sources);
+  assert(!files.some((node) => node.label === "notes.md"));
+  const definitions = files.find((node) => node.label === "definitions.sysml");
+  const design = files.find((node) => node.label === "design");
+  assert(definitions && design);
+  assert((await children(design)).some((node) => node.label === "system.sysml"));
+  const packageNode = (await children(definitions)).find((node) => node.label === "Components");
+  assert(packageNode);
+  const battery = (await children(packageNode)).find((node) => node.label === "Battery");
+  assert(battery);
+  const output = (await children(battery)).find((node) => node.label === "output");
+  assert(output);
+  assert.equal(tree.getParent(output), battery);
+  const open = tree.getTreeItem(output).command!;
+  await vscode.commands.executeCommand(open.command, ...open.arguments!);
+  const editor = vscode.window.activeTextEditor!;
+  assert.equal(editor.document.uri.toString(), definitions.uri!.toString());
+  assert.equal(editor.selection.start.line, 3);
+  let refreshed = false;
+  const listener = tree.onDidChangeTreeData((node) => {
+    if (!node || node === definitions) refreshed = true;
+  });
+  const change = new vscode.WorkspaceEdit();
+  change.replace(editor.document.uri, new vscode.Range(3, 9, 3, 15), "backup");
+  assert(await vscode.workspace.applyEdit(change));
+  assert(editor.document.isDirty);
+  await eventually(
+    async () => refreshed,
+    (ready) => ready,
+  );
+  const changedPackage = (await children(definitions)).find((node) => node.label === "Components")!;
+  const changedBattery = (await children(changedPackage)).find((node) => node.label === "Battery")!;
+  assert(
+    (await children(changedBattery)).some((node) => node.label === "backup"),
+    "The outline must use unsaved content",
+  );
+  listener.dispose();
+  await editor.document.save();
+
+  const namespaces = await children(library);
+  const si = namespaces.find((node) => node.label === "SI");
+  assert(si, "The library catalogue must come from the native engine");
+  assert((await children(si)).some((node) => node.label === "volt"));
+  const openLibrary = tree.getTreeItem(si).command!;
+  await vscode.commands.executeCommand(openLibrary.command, ...openLibrary.arguments!);
+  assert.notEqual(vscode.window.activeTextEditor!.document.uri.scheme, "file");
+  assert(vscode.window.activeTextEditor!.document.getText().includes("package SI"));
+  assert.equal(
+    tree.current?.uri.toString(),
+    a.uri.toString(),
+    "Browsing must not switch the selected project",
+  );
+
   const bUri = vscode.Uri.joinPath(b.uri, "system.sysml");
   await eventually(
     async () => vscode.languages.getDiagnostics(bUri),
@@ -134,6 +213,6 @@ export async function run(): Promise<void> {
   );
   await vscode.workspace.fs.stat(third);
   console.log(
-    "DRYAS host checks passed: project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
+    "DRYAS host checks passed: dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
   );
 }
