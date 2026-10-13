@@ -13,6 +13,7 @@ const jobs = [
   ["packages/mcp-server/src/cli.ts", "packages/mcp-server/dist/cli.cjs", "cjs"],
   ["packages/extension/src/extension.ts", "packages/extension/dist/extension.cjs", "cjs"],
   ["test/host/index.ts", "test/host/dist/index.cjs", "cjs"],
+  ["test/host/projects.ts", "test/host/dist/projects.cjs", "cjs"],
 ];
 const common = {
   absWorkingDir: root,

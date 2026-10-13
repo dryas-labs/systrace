@@ -33,7 +33,7 @@ VSIX 输出在 `artifacts/`。在 VS Code 或 Cursor 中执行 **Extensions: Ins
 
 [config/engine.json](config/engine.json) 记录开发引擎的版本和源码提交。
 本版 VSIX 使用外部的 `sysml-lsp` 与 `sysml-grpc`，不包含引擎二进制或标准库。
-0.1.6 使用 `v0.9.2-dryas.5`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
+0.1.7 使用 `v0.9.2-dryas.5`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
 源文件名和完整的 `doc`。升级时需要同时更新 VSIX 和两个外部引擎程序；如果手动填写过
 `dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.5`。
 安装所配置 language engine 需要的构建工具链后，可以运行：
@@ -48,7 +48,7 @@ node scripts/build-engine.mjs
 
 ## 项目使用
 
-打开一个可信项目文件夹，在 `model/` 中编写 `.sysml` 或 `.kerml`。
+打开一个可信项目文件夹，在项目目录中编写 `.sysml` 或 `.kerml`。
 可用 `dryas.modelRoots` 指定其他源码文件夹。插件提供补全、悬停、跨文件定义跳转和实时诊断。
 对 `ISQ::voltage`、`ScalarValues::Integer` 等标准库名称按 F12，会打开引擎内置的只读源码；
 可以继续在标准库中查看悬浮提示和跳转定义，无需另行下载标准库或复制到项目中。
@@ -113,3 +113,28 @@ DRYAS 自有代码采用 [Apache License 2.0](LICENSE)。源码中的
 `SPDX-License-Identifier: Apache-2.0` 标记该文件的许可证。
 构建根据实际打包的 JavaScript 依赖生成 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
 并将许可证与声明放入 VSIX。外部 language engine 及其标准库的许可证与发布清单另行管理。
+
+## 项目管理
+
+资源管理器中的 **Systrace Projects** 列出工作区的本地项目文件夹。
+通过 **New Systrace Project** 指定名称和父目录来新建项目，或用 **Open Systrace Project**
+加入已有文件夹。每个文件夹就是项目 root。点击项目会将它设为保存校验和 MCP 配置的默认目标；
+切换编辑器标签不会改变这个选择。其他项目仍可编辑。关闭项目只移除工作区条目并停止插件的相关服务，
+不删除文件，也不改变外部 Agent 已有的 MCP 连接。保存 VS Code 工作区后可以重新打开项目列表。
+
+模型可放在项目根目录或子目录中，`dryas.modelRoots` 默认是 `["."]`。
+已经显式设置的 `["model"]` 等配置仍然生效；旧工作区需要使用新默认范围时，应修改或清除原设置。
+可以通过文件夹级设置缩小源码范围。隐藏目录和 `node_modules` 与语言服务一样被排除；
+`designs` 等普通目录可以包含模型。生成的模型文件应放在所配置的源码目录之外。
+本版不提供自定义 glob 排除规则。
+
+项目根目录必须互不嵌套，避免两个语言服务同时处理同一份源码。已有工作区包含重叠根目录时会明确报错，
+不会把它们悄悄合并成一个模型。多个项目不会自动相互导入。
+
+右键项目并选择 **Show MCP Configuration**，生成的连接绑定该项目 root 和源码目录。
+之后切换当前项目不会改变已经交给 Agent 的配置。外部 Agent 的对话由其宿主管理，
+插件不会创建或重新绑定这些对话。四个已有的只读 MCP 工具保持不变。
+含本机路径的生成配置应保存在 Git 之外。
+
+可用 `npm run test:host -- --projects --vsix` 运行隔离的双项目检查；
+再加 `--cursor` 可在已配置的 Cursor 安装中执行相同检查。

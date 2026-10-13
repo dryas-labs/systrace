@@ -7,6 +7,7 @@ import { root, loadConfig } from "./config.mjs";
 
 const config = await loadConfig();
 const host = process.argv.includes("--cursor") ? "cursor" : "vscode";
+const projectChecks = process.argv.includes("--projects");
 const executable =
   config.editors[host] ||
   (host === "vscode" ? await downloadAndUnzipVSCode(config.tests.vscodeVersion) : "");
@@ -17,6 +18,36 @@ const workspace = await mkdtemp(resolve(root, ".tmp/host-test-"));
 await cp(resolve(root, "test/fixtures/hello-system"), resolve(workspace, "project"), {
   recursive: true,
 });
+let workspaceTarget = resolve(workspace, "project");
+if (projectChecks) {
+  const a = resolve(workspace, "ProjectA");
+  const b = resolve(workspace, "ProjectB");
+  await mkdir(resolve(a, "design"), { recursive: true });
+  await mkdir(resolve(b, "library"), { recursive: true });
+  await writeFile(resolve(a, "definitions.sysml"), "package Components { part def Battery; }\n");
+  await writeFile(
+    resolve(a, "design/system.sysml"),
+    "package System { private import Components::*; part battery : Battery; }\n",
+  );
+  await writeFile(
+    resolve(b, "library/definitions.sysml"),
+    "package Components { part def Motor; }\n",
+  );
+  await writeFile(
+    resolve(b, "system.sysml"),
+    "package System { private import Components::*; part motor : Motor; part wrong : Battery; }\n",
+  );
+  workspaceTarget = resolve(workspace, "projects.code-workspace");
+  await writeFile(
+    workspaceTarget,
+    JSON.stringify({
+      folders: [
+        { path: a, name: "Project A" },
+        { path: b, name: "Project B" },
+      ],
+    }),
+  );
+}
 const env = {
   ...process.env,
 };
@@ -97,7 +128,7 @@ if (process.argv.includes("--vsix")) {
   extensionPath = resolve(workspace, "extensions", installed);
 }
 const args = [
-  resolve(workspace, "project"),
+  workspaceTarget,
   "--new-window",
   "--disable-extensions",
   "--disable-workspace-trust",
@@ -110,7 +141,7 @@ const args = [
   `--user-data-dir=${resolve(workspace, "profile")}`,
   `--extensions-dir=${resolve(workspace, "extensions")}`,
   `--extensionDevelopmentPath=${extensionPath}`,
-  `--extensionTestsPath=${resolve(root, "test/host/dist/index.cjs")}`,
+  `--extensionTestsPath=${resolve(root, projectChecks ? "test/host/dist/projects.cjs" : "test/host/dist/index.cjs")}`,
 ];
 let output = "";
 const code = await new Promise((done, reject) => {
@@ -151,5 +182,5 @@ await writeFile(resolve(workspace, "host.log"), output);
 if (code !== 0 || !output.includes("DRYAS host checks passed:"))
   throw new Error("Host checks failed. Inspect the ignored .tmp host-test log.");
 console.log(
-  `${host}: ${process.argv.includes("--vsix") ? "VSIX installation and " : ""}activation, language features and saved validation passed in an isolated extension host.`,
+  `${host}: ${process.argv.includes("--vsix") ? "VSIX installation and " : ""}${projectChecks ? "project management and isolation" : "activation, language features and saved validation"} passed in an isolated extension host.`,
 );

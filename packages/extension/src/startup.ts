@@ -38,7 +38,7 @@ export function startupError(error: unknown, stage: StartupStage): AdapterError 
   if (stage === "model-folders" && error instanceof AdapterError && error.code === "INVALID_PATH")
     return new AdapterError(
       error.code,
-      `${error.message} Set dryas.modelRoots in Workspace Folder Settings to existing source folders relative to the opened workspace folder. The default is ["model"]; projects with another layout need an explicit setting.`,
+      `${error.message} Set dryas.modelRoots in Workspace Folder Settings to existing source folders relative to the opened workspace folder. The default is ["."]; configure narrower source folders when needed.`,
     );
   if (error instanceof AdapterError) return error;
   const details = error && typeof error === "object" ? (error as Record<string, unknown>) : {};

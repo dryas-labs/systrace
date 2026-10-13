@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -24,7 +24,8 @@
   ],
   "activationEvents": [
     "onLanguage:sysml",
-    "onLanguage:kerml"
+    "onLanguage:kerml",
+    "onView:systrace.projects"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -85,6 +86,31 @@
       {
         "command": "dryas.showMcpConfiguration",
         "title": "DRYAS: Show MCP Configuration"
+      },
+      {
+        "command": "dryas.createProject",
+        "title": "DRYAS: New Systrace Project",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "dryas.openProject",
+        "title": "DRYAS: Open Systrace Project",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "dryas.selectProject",
+        "title": "DRYAS: Use Project",
+        "icon": "$(check)"
+      },
+      {
+        "command": "dryas.closeProject",
+        "title": "DRYAS: Close Project",
+        "icon": "$(close)"
+      },
+      {
+        "command": "dryas.configureModelRoots",
+        "title": "DRYAS: Configure Model Source Folders",
+        "icon": "$(settings-gear)"
       }
     ],
     "configuration": {
@@ -108,10 +134,10 @@
             "type": "string"
           },
           "default": [
-            "model"
+            "."
           ],
           "scope": "resource",
-          "description": "Project-relative folders containing SysML/KerML source; used by the LSP and saved-file validation."
+          "description": "Project-relative folders containing SysML/KerML source. Defaults to the entire project root; used by editor services and saved-model tools."
         },
         "dryas.expectedEngineVersion": {
           "type": "string",
@@ -128,6 +154,68 @@
           "description": "Deadline for a language engine request in milliseconds."
         }
       }
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "systrace.projects",
+          "name": "Systrace Projects"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "systrace.projects",
+        "contents": "Create a project or open an existing folder. Model files can be placed anywhere inside the project root.\n[New Project](command:dryas.createProject)\n[Open Project](command:dryas.openProject)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dryas.createProject",
+          "when": "view == systrace.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "dryas.openProject",
+          "when": "view == systrace.projects",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dryas.selectProject",
+          "when": "view == systrace.projects && viewItem == systraceProject",
+          "group": "1_project"
+        },
+        {
+          "command": "dryas.validateProject",
+          "when": "view == systrace.projects && viewItem == systraceProject",
+          "group": "2_tools"
+        },
+        {
+          "command": "dryas.showMcpConfiguration",
+          "when": "view == systrace.projects && viewItem == systraceProject",
+          "group": "2_tools"
+        },
+        {
+          "command": "dryas.configureModelRoots",
+          "when": "view == systrace.projects && viewItem == systraceProject",
+          "group": "2_tools"
+        },
+        {
+          "command": "dryas.closeProject",
+          "when": "view == systrace.projects && viewItem == systraceProject",
+          "group": "3_close"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "dryas.openProject",
+          "when": "explorerResourceIsFolder && resourceScheme == file",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "dependencies": {

@@ -38,7 +38,7 @@ See [Language engine](docs/language-engine.md) for the current selection.
 source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
 it does not bundle the engine or its standard library.
 
-Version 0.1.6 uses `v0.9.2-dryas.5`. Selected completion details show the native
+Version 0.1.7 uses `v0.9.2-dryas.5`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
 complete `doc`. Update the VSIX and both external executables together. If you
 set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.5` too.
@@ -55,7 +55,7 @@ executables on PATH. Do not commit machine paths in workspace settings.
 
 ## Work with a project
 
-Open a trusted project folder and write `.sysml` or `.kerml` files in `model/`.
+Open a trusted project folder and write `.sysml` or `.kerml` files in the project folder.
 Use `dryas.modelRoots` for other source folders. The extension provides completion,
 hover, cross-file definition navigation and live diagnostics.
 
@@ -138,3 +138,34 @@ generates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) from the JavaScript
 dependencies actually bundled and includes licenses and notices in the VSIX.
 Licensing and release inventories for the external language engine and its standard
 library are managed separately.
+
+## Projects
+
+The **Systrace Projects** view in the Explorer lists the workspace's local project folders.
+Use **New Systrace Project** to choose a name and parent directory, or **Open Systrace Project**
+to add an existing folder. Each folder is a project root. Click a project to make it the
+default target for saved validation and MCP configuration; switching editor tabs does not
+change that selection. Other projects remain editable. Closing a project removes its
+workspace entry and stops this extension's services, without deleting files or changing an
+external agent's existing MCP connection. Save the VS Code workspace to reopen its project list.
+
+Model files can live at the project root or in subfolders. `dryas.modelRoots` defaults to
+`["."]`; an explicitly configured value such as `["model"]` is still respected. Change or
+clear that setting if an older workspace should use the new default. Folder-scoped settings
+can narrow the source directories. Hidden folders and `node_modules` are excluded, matching
+the language service. Other folders, including `designs`, can contain model sources; generated
+model files should live outside configured source roots. Custom glob exclusions are not
+provided by this version.
+
+Project roots must be separate, non-nested directories so two language services cannot own
+the same source. An overlapping workspace configuration is reported instead of loading a
+combined model. Projects do not automatically become one model or import one another.
+
+Right-click a project and choose **Show MCP Configuration** to generate a connection bound
+to that root and its configured model directories. A configuration already given to an agent
+keeps that binding when the selected project changes. External agents manage their own chats;
+this extension does not create or retarget those conversations. The existing four read-only
+MCP tools are unchanged. Keep generated configurations containing local paths outside Git.
+
+For an isolated two-project check, run `npm run test:host -- --projects --vsix`; add `--cursor`
+to run the same check in the configured Cursor installation.

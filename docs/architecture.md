@@ -77,8 +77,8 @@ Failed requests are not automatically retried or disguised as validation results
 
 Model files are read as UTF-8. Paths must remain inside the project, and symlinks or
 junctions in model directories are rejected. Hidden directories and `node_modules`
-are excluded from scanning. Source trees containing `selection` or `designs` are
-rejected; configure actual model folders instead. Limits are 2,000 files, 2 MiB per
+are excluded from scanning. Source roots default to the project folder. Ordinary directory names such as
+`designs` are permitted; narrow `dryas.modelRoots` when generated models should be excluded. Limits are 2,000 files, 2 MiB per
 file, 32 MiB total and 4,000 directories. These are product resource limits, not
 language restrictions or semantic acceptance criteria.
 

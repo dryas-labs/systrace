@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
 import { spawn, type ChildProcess } from "node:child_process";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { randomUUID } from "node:crypto";
+import { realpath } from "node:fs/promises";
+import { Projects, overlappingRoots } from "./projects.js";
 import { LanguageClient, CloseAction, ErrorAction } from "vscode-languageclient/node";
 import {
   ProjectSession,
@@ -39,6 +41,7 @@ interface RunningProject {
 
 interface ServiceStatus {
   project: number;
+  name?: string;
   connection: "starting" | "connected" | "stopped" | "error";
   index: "unconfirmed";
   stage: string;
@@ -56,7 +59,7 @@ function options(
   const settings = vscode.workspace.getConfiguration("dryas", folder.uri);
   return {
     projectRoot: folder.uri.fsPath,
-    modelRoots: settings.get<string[]>("modelRoots", ["model"]),
+    modelRoots: settings.get<string[]>("modelRoots", ["."]),
     lspPath:
       settings.get<string>("lspPath", "sysml-lsp") === "sysml-lsp"
         ? (process.env.DRYAS_LSP_PATH ?? "sysml-lsp")
@@ -92,12 +95,18 @@ export class Manager {
       ),
   );
   private disposed = false;
+  private readonly projectUi: Projects;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly provider: LanguageEngineProvider = DEFAULT_LANGUAGE_ENGINE_PROVIDER,
   ) {
     assertLanguageEngineProvider(provider);
+    this.projectUi = new Projects(
+      context,
+      (folder) => this.statuses.get(folder.uri.toString()),
+      () => this.updateStatusBar(),
+    );
     this.statusBar.name = "DRYAS language service";
     this.statusBar.command = "dryas.showLanguageServiceStatus";
     context.subscriptions.push(
@@ -125,9 +134,16 @@ export class Manager {
         this.refresh("manual-restart"),
       ),
       vscode.commands.registerCommand("dryas.showLanguageServiceStatus", () => this.showStatus()),
-      vscode.commands.registerCommand("dryas.validateProject", () => this.validate()),
-      vscode.commands.registerCommand("dryas.showMcpConfiguration", () =>
-        this.showMcpConfiguration(),
+      vscode.commands.registerCommand("dryas.validateProject", (folder?: vscode.WorkspaceFolder) =>
+        this.validate(folder),
+      ),
+      vscode.commands.registerCommand(
+        "dryas.configureModelRoots",
+        (folder?: vscode.WorkspaceFolder) => this.configureModelRoots(folder),
+      ),
+      vscode.commands.registerCommand(
+        "dryas.showMcpConfiguration",
+        (folder?: vscode.WorkspaceFolder) => this.showMcpConfiguration(folder),
       ),
     );
   }
@@ -157,13 +173,12 @@ export class Manager {
 
   private setStatus(key: string, status: ServiceStatus): void {
     this.statuses.set(key, status);
-    this.updateStatusBar();
+    this.projectUi.refresh();
   }
 
   private updateStatusBar(): void {
     if (this.disposed) return;
-    const uri = vscode.window.activeTextEditor?.document.uri;
-    const folder = uri && vscode.workspace.getWorkspaceFolder(uri);
+    const folder = this.projectUi.current;
     const status = folder
       ? this.statuses.get(folder.uri.toString())
       : this.statuses.size === 1
@@ -181,7 +196,7 @@ export class Manager {
           : status.connection === "error"
             ? "$(warning) DRYAS: Connection failed"
             : "$(circle-slash) DRYAS: Disconnected";
-    this.statusBar.text = label;
+    this.statusBar.text = `${label}${folder ? ` · ${folder.name}` : ""}`;
     this.statusBar.tooltip = `${status.message}\nClick for language-service status. No complete-index signal is available from this engine.`;
     this.statusBar.show();
   }
@@ -217,10 +232,44 @@ export class Manager {
       this.recoveries.delete(key);
       this.pendingRecovery.delete(key);
     }
+    const canonicalRoots = new Map(
+      await Promise.all(
+        folders.map(
+          async (folder) =>
+            [
+              folder.uri.toString(),
+              await realpath(folder.uri.fsPath).catch(() => folder.uri.fsPath),
+            ] as const,
+        ),
+      ),
+    );
     for (const folder of folders) {
       if (this.disposed) break;
       const key = folder.uri.toString();
       const config = options(folder, this.provider);
+      if (
+        folders.some(
+          (other) =>
+            other !== folder &&
+            overlappingRoots(canonicalRoots.get(key)!, canonicalRoots.get(other.uri.toString())!),
+        )
+      ) {
+        await this.stopProject(key, "project-roots-overlap");
+        this.attempted.delete(key);
+        this.setStatus(key, {
+          project: folder.index + 1,
+          name: folder.name,
+          generation: this.statuses.get(key)?.generation ?? 0,
+          reason: "workspace",
+          index: "unconfirmed",
+          connection: "error",
+          stage: "project-root",
+          errorCode: "INVALID_PATH",
+          message:
+            "Project roots overlap. Use separate root folders so model sessions remain isolated.",
+        });
+        continue;
+      }
       const previous = this.attempted.get(key);
       const changed = !previous || !sameConfig(previous, config);
       const recovering = this.pendingRecovery.delete(key);
@@ -284,7 +333,7 @@ export class Manager {
       this.attempted.set(key, config);
       await this.startProject(folder, config, reason);
     }
-    this.updateStatusBar();
+    this.projectUi.refresh();
   }
 
   private async startProject(
@@ -294,7 +343,13 @@ export class Manager {
   ): Promise<void> {
     const key = folder.uri.toString();
     const generation = (this.statuses.get(key)?.generation ?? 0) + 1;
-    const base = { project: folder.index + 1, generation, reason, index: "unconfirmed" as const };
+    const base = {
+      project: folder.index + 1,
+      name: folder.name,
+      generation,
+      reason,
+      index: "unconfirmed" as const,
+    };
     let stage: StartupStage = "configuration";
     this.setStatus(key, {
       ...base,
@@ -315,7 +370,7 @@ export class Manager {
       stage = "model-folders";
       const snapshot = await readSnapshot(
         config.projectRoot,
-        config.modelRoots ?? ["model"],
+        config.modelRoots ?? ["."],
         undefined,
         true,
       );
@@ -344,7 +399,7 @@ export class Manager {
         index: folder.index,
       };
       client = new LanguageClient(
-        `dryas-${folder.index}`,
+        `dryas-${library.scheme}`,
         "DRYAS SysML",
         () =>
           new Promise<ChildProcess>((resolve, reject) => {
@@ -521,24 +576,21 @@ export class Manager {
     }
   }
 
-  private async chooseFolder(): Promise<vscode.WorkspaceFolder | undefined> {
-    const folders = vscode.workspace.workspaceFolders ?? [];
-    const current =
-      vscode.window.activeTextEditor &&
-      vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri);
-    if (current) return current;
-    if (folders.length === 1) return folders[0];
-    const selected = await vscode.window.showQuickPick(
-      folders.map((folder) => ({ label: folder.name, folder })),
-      { placeHolder: "Select the project to validate" },
-    );
-    return selected?.folder;
+  private async chooseFolder(
+    requested?: vscode.WorkspaceFolder,
+  ): Promise<vscode.WorkspaceFolder | undefined> {
+    const folder = this.projectUi.resolve(requested);
+    if (!folder)
+      void vscode.window.showInformationMessage(
+        "Open a Systrace project from the Projects view first.",
+      );
+    return folder;
   }
 
-  private async validate(): Promise<void> {
-    await this.refresh("validation");
-    const folder = await this.chooseFolder();
+  private async validate(requested?: vscode.WorkspaceFolder): Promise<void> {
+    const folder = await this.chooseFolder(requested);
     if (!folder) return;
+    await this.refresh("validation");
     const running = this.projects.get(folder.uri.toString());
     if (!running || running.failed) {
       void vscode.window.showErrorMessage(
@@ -577,8 +629,34 @@ export class Manager {
     );
   }
 
-  private async showMcpConfiguration(): Promise<void> {
-    const folder = await this.chooseFolder();
+  private async configureModelRoots(requested?: vscode.WorkspaceFolder): Promise<void> {
+    const folder = await this.chooseFolder(requested);
+    if (!folder) return;
+    const selected = await vscode.window.showOpenDialog({
+      title: `Model source folders for ${folder.name}`,
+      defaultUri: folder.uri,
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: true,
+      openLabel: "Use Source Folders",
+    });
+    if (!selected?.length || selected.some((uri) => uri.scheme !== "file")) return;
+    const roots = selected.map(
+      (uri) => relative(folder.uri.fsPath, uri.fsPath).split(sep).join("/") || ".",
+    );
+    try {
+      await readSnapshot(folder.uri.fsPath, roots, undefined, true);
+      if (!this.projectUi.resolve(folder)) return;
+      await vscode.workspace
+        .getConfiguration("dryas", folder.uri)
+        .update("modelRoots", roots, vscode.ConfigurationTarget.WorkspaceFolder);
+    } catch (error) {
+      void vscode.window.showErrorMessage(publicError(error).message);
+    }
+  }
+
+  private async showMcpConfiguration(requested?: vscode.WorkspaceFolder): Promise<void> {
+    const folder = await this.chooseFolder(requested);
     if (!folder) return;
     const config = options(folder, this.provider);
     const args = [
@@ -592,7 +670,7 @@ export class Manager {
       "--timeout-ms",
       String(config.engine.timeoutMs),
     ];
-    for (const root of config.modelRoots ?? ["model"]) args.push("--model-root", root);
+    for (const root of config.modelRoots ?? ["."]) args.push("--model-root", root);
     const document = await vscode.workspace.openTextDocument({
       language: "json",
       content: JSON.stringify({ mcpServers: { dryas: { command: "node", args } } }, null, 2),
@@ -625,6 +703,7 @@ export class Manager {
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    this.projectUi.dispose();
     await this.refreshQueue.dispose();
     await Promise.all(
       [...this.projects.keys()].map((key) => this.stopProject(key, "extension-disposed")),

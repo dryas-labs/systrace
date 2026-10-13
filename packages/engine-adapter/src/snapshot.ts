@@ -47,15 +47,10 @@ export async function resolveModelRoots(project: string, roots: string[]): Promi
     for (const name of roots) {
       const requested = resolve(base, relativeName(name));
       const segments = relative(base, requested).split(sep).filter(Boolean);
-      if (
-        segments.some(
-          (segment) =>
-            ["selection", "designs", "node_modules"].includes(segment) || segment.startsWith("."),
-        )
-      )
+      if (segments.some((segment) => segment === "node_modules" || segment.startsWith(".")))
         throw new AdapterError(
           "INVALID_PATH",
-          "Model roots must stay outside local archives and hidden directories.",
+          "Model roots must stay outside dependency and hidden directories.",
         );
       let parent = base;
       for (const segment of segments) {
@@ -105,11 +100,6 @@ export async function readSnapshot(
         );
       for (const entry of await readdir(folder, { withFileTypes: true })) {
         if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-        if (entry.isDirectory() && ["selection", "designs"].includes(entry.name))
-          throw new AdapterError(
-            "INVALID_PATH",
-            "Choose model folders that do not contain local selection or design archives.",
-          );
         const file = join(folder, entry.name);
         if (entry.isSymbolicLink())
           throw new AdapterError(

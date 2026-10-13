@@ -5,7 +5,7 @@
 面向 VS Code 和 Cursor 的 SysML v2 编辑扩展，由外部 language engine（语言引擎）提供语言能力。
 当前是早期开发版，尚未实现 view 渲染和内置 agent。
 
-0.1.6 使用 language engine 构建 `v0.9.2-dryas.5`。选中补全候选后，详情显示原生声明、引用名称、
+0.1.7 使用 language engine 构建 `v0.9.2-dryas.5`。选中补全候选后，详情显示原生声明、引用名称、
 实际声明来源、源文件名和完整文档。说明按需加载，与普通悬浮共用引擎的文档提取逻辑。
 别名保留原来的插入名称；没有文档的元素只显示声明和来源。
 点击详情箭头，或在补全列表已打开时按 Ctrl+Space，可展开编辑器原生的详情面板。
@@ -19,16 +19,16 @@
 1. 按仓库 `config/engine.json` 中记录的版本构建 language engine。
 2. 将 `sysml-lsp` 和 `sysml-grpc` 加入 PATH，或在编辑器的 **User Settings** 中设置
    **DRYAS: Lsp Path** 和 **DRYAS: Api Path**。不要把本机路径写入提交的工作区设置。
-3. 打开可信的项目文件夹，把 SysML/KerML 文件放在 `model/` 中，或通过
+3. 打开可信的项目文件夹，在项目根目录或子目录中放置 SysML/KerML 文件，或通过
    **DRYAS: Model Roots** 指定项目源码文件夹。
 4. 打开 `.sysml` 文件，即可使用诊断、补全、悬浮提示和定义跳转。
 
 此 VSIX 不包含引擎及其标准库。模型文件夹中的文件必须是可读取的 UTF-8 文件；
-当前版本拒绝符号链接和 junction。本地的 `selection/`、`designs/` 归档必须位于配置的源码文件夹之外。
+当前版本拒绝符号链接和 junction。隐藏目录和 `node_modules` 不参与扫描，可配置更窄的源码范围。
 
 如果启动时出现 `INVALID_PATH during model-folders`，请检查工作区设置中的
-**DRYAS: Model Roots**（多根工作区使用工作区文件夹设置）。默认值 `["model"]`
-要求存在 `model/` 目录；其他目录结构需要显式设置相对于所打开工作区文件夹的路径。
+**DRYAS: Model Roots**（多根工作区使用工作区文件夹设置）。默认值 `["."]`
+从项目根目录发现模型；显式指定的源码文件夹路径相对于项目根目录。
 例如，打开 `SysML-v2-Release` 后，编辑包相关教程可使用：
 
 ```json
@@ -76,3 +76,28 @@ MCP 服务提供四个只读工具：`validate`、`find_element`、`describe_ele
 DRYAS 代码采用 Apache-2.0。许可证原文与打包的 JavaScript 依赖声明见
 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 法律文本和第三方声明保留原文。
+
+## 项目管理
+
+资源管理器中的 **Systrace Projects** 列出工作区的本地项目文件夹。
+通过 **New Systrace Project** 指定名称和父目录来新建项目，或用 **Open Systrace Project**
+加入已有文件夹。每个文件夹就是项目 root。点击项目会将它设为保存校验和 MCP 配置的默认目标；
+切换编辑器标签不会改变这个选择。其他项目仍可编辑。关闭项目只移除工作区条目并停止插件的相关服务，
+不删除文件，也不改变外部 Agent 已有的 MCP 连接。保存 VS Code 工作区后可以重新打开项目列表。
+
+模型可放在项目根目录或子目录中，`dryas.modelRoots` 默认是 `["."]`。
+已经显式设置的 `["model"]` 等配置仍然生效；旧工作区需要使用新默认范围时，应修改或清除原设置。
+可以通过文件夹级设置缩小源码范围。隐藏目录和 `node_modules` 与语言服务一样被排除；
+`designs` 等普通目录可以包含模型。生成的模型文件应放在所配置的源码目录之外。
+本版不提供自定义 glob 排除规则。
+
+项目根目录必须互不嵌套，避免两个语言服务同时处理同一份源码。已有工作区包含重叠根目录时会明确报错，
+不会把它们悄悄合并成一个模型。多个项目不会自动相互导入。
+
+右键项目并选择 **Show MCP Configuration**，生成的连接绑定该项目 root 和源码目录。
+之后切换当前项目不会改变已经交给 Agent 的配置。外部 Agent 的对话由其宿主管理，
+插件不会创建或重新绑定这些对话。四个已有的只读 MCP 工具保持不变。
+含本机路径的生成配置应保存在 Git 之外。
+
+可用 `npm run test:host -- --projects --vsix` 运行隔离的双项目检查；
+再加 `--cursor` 可在已配置的 Cursor 安装中执行相同检查。

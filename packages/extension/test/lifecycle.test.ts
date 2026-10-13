@@ -21,6 +21,7 @@ const host = vi.hoisted(() => {
     }[],
     commands: new Map<string, () => unknown>(),
     clients: [] as {
+      id: string;
       options: { errorHandler: { closed(): unknown }; documentSelector: { scheme: string }[] };
       stop: ReturnType<typeof vi.fn>;
     }[],
@@ -33,6 +34,11 @@ const host = vi.hoisted(() => {
   };
 });
 
+vi.mock("node:fs/promises", async (original) => ({
+  ...(await original<typeof import("node:fs/promises")>()),
+  realpath: async (path: string) => path,
+}));
+
 vi.mock("vscode", () => {
   const event = (name: string) => (callback: (event: unknown) => void) => {
     host.events[name] = callback;
@@ -40,9 +46,18 @@ vi.mock("vscode", () => {
   };
   return {
     Uri: { file: host.uri },
+    TreeItemCollapsibleState: { None: 0 },
+    TreeItem: class {},
+    ThemeIcon: class {},
+    EventEmitter: class {
+      event = () => ({ dispose() {} });
+      fire() {}
+      dispose() {}
+    },
     RelativePattern: class {},
     StatusBarAlignment: { Left: 1 },
     window: {
+      createTreeView: () => ({ dispose() {} }),
       createOutputChannel: () => ({
         info: (text: string) => host.logs.push(text),
         error: (text: string) => host.logs.push(text),
@@ -101,7 +116,7 @@ vi.mock("vscode-languageclient/node", () => ({
   LanguageClient: class {
     stop = vi.fn(async () => {});
     constructor(
-      _id: string,
+      public id: string,
       _name: string,
       private readonly server: () => Promise<unknown>,
       public options: {
@@ -159,6 +174,12 @@ import { TEST_LANGUAGE_SERVICE } from "./language-service-fixture.js";
 
 beforeEach(() => {
   vi.useFakeTimers();
+  host.folders.splice(
+    0,
+    host.folders.length,
+    { uri: host.uri("project-one"), name: "one", index: 0 },
+    { uri: host.uri("project-two"), name: "two", index: 1 },
+  );
   host.configs.clear();
   host.state.clear();
   host.libraries.length = 0;
@@ -455,4 +476,18 @@ it("disposes sessions and watchers when language-client construction fails after
   } finally {
     await injected.dispose();
   }
+});
+
+it("keeps language client identities distinct when closing a project shifts folder indexes", async () => {
+  const api = await open();
+  const retained = host.clients[1]!.id;
+  host.folders.shift();
+  host.folders[0]!.index = 0;
+  host.folders.push({ uri: host.uri("project-three"), name: "three", index: 1 });
+  host.events.workspace!({});
+  await vi.advanceTimersByTimeAsync(0);
+  expect(host.clients[0]!.stop).toHaveBeenCalledOnce();
+  expect(host.clients[1]!.stop).not.toHaveBeenCalled();
+  expect(host.clients[2]!.id).not.toBe(retained);
+  expect(api.getLanguageServiceStatus()).toHaveLength(2);
 });

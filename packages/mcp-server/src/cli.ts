@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   });
   if (values.help) {
     process.stdout.write(
-      "dryas-mcp --project <folder> [--engine <sysml-grpc>] [--model-root model] [--expected-version <version>]\n",
+      "dryas-mcp --project <folder> [--engine <sysml-grpc>] [--model-root .] [--expected-version <version>]\n",
     );
     return;
   }
@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     throw new Error("Invalid request deadline.");
   const app = createServer({
     projectRoot: resolve(values.project),
-    modelRoots: values["model-root"] ?? ["model"],
+    modelRoots: values["model-root"] ?? ["."],
     engine: {
       executable: values.engine,
       timeoutMs,
