@@ -242,10 +242,16 @@ export async function run(): Promise<void> {
     assert(!after.content.references?.length);
     assert(!(await call<Found>("find_element", { name: "Battery" })).items.length);
     await vscode.workspace.fs.stat(bUri);
+    // Add the closed project directly by folder, without adding a workspace root.
+    await tree.addReference(a, b.uri);
+    await connected(1);
+    assert.equal(vscode.workspace.workspaceFolders?.length, 1);
+    await eventually("external folder completion", completion, (items) => has(items, "Battery"));
+    assert.equal((await call<Report>("validate")).project.errors, 0);
   } finally {
     await client.close();
   }
   console.log(
-    "DRYAS host checks passed: declared and transitive project references, native completion and definition, read-only dependency tree, saved-only isolation, saved updates with dependency open and closed, MCP validation/find/describe and scope refresh, dependency error locations and deletion/restoration, reference removal without deleting files.",
+    "DRYAS host checks passed: declared, external-folder and transitive project references, native completion and definition, read-only dependency tree, saved-only isolation, saved updates with dependency open and closed, MCP validation/find/describe and scope refresh, dependency error locations and deletion/restoration, reference removal without deleting files.",
   );
 }

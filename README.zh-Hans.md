@@ -33,7 +33,7 @@ VSIX 输出在 `artifacts/`。在 VS Code 或 Cursor 中执行 **Extensions: Ins
 
 [config/engine.json](config/engine.json) 记录开发引擎的版本和源码提交。
 本版 VSIX 使用外部的 `sysml-lsp` 与 `sysml-grpc`，不包含引擎二进制或标准库。
-0.1.13 使用 `v0.9.2-dryas.5`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
+0.1.14 使用 `v0.9.2-dryas.5`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
 源文件名和完整的 `doc`。升级时需要同时更新 VSIX 和两个外部引擎程序；如果手动填写过
 `dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.5`。
 安装所配置 language engine 需要的构建工具链后，可以运行：
@@ -170,13 +170,16 @@ DRYAS 自有代码采用 [Apache License 2.0](LICENSE)。源码中的
 
 ## 项目引用
 
-先打开两个项目，右键使用依赖的项目，选择 **Add Project Reference…**，再选择提供模型定义的项目。
+右键使用依赖的项目，选择 **Add Project Reference…**。可以选择已打开的项目，也可以选择
+**Browse for Project Folder…** 浏览外部项目文件夹。没有其他已打开项目时，直接显示文件夹选择框。
+引用外部项目不会将其加入工作区，也不会改变当前项目。
 **Project References** 展示直接及间接引用。引用文件在使用方的语言上下文中只读打开；
 需要修改时使用 **Open Referenced Project** 进入所属项目。**Remove Project Reference** 只移除引用关系，
 不删除被引用项目的文件。关闭被引用项目的工作区条目后，使用方仍可加载其模型。
 
 源码范围和引用关系使用相对路径保存在 `.systrace/project.json`。新项目会创建该文件。
-给已有项目添加引用时，会用两个项目当前的源码范围初始化缺失的配置文件。
+添加引用时，已打开的项目会用当前源码范围初始化缺失的配置。外部文件夹保持原样：
+存在项目配置时按其源码范围加载，没有配置时默认使用整个文件夹。
 **Configure Model Source Folders** 也写入该文件。该配置优先于旧的 `dryas.modelRoots` 设置及
 MCP 的 `--model-root` 回退参数；引擎程序路径仍留在本机编辑器配置中。
 

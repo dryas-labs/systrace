@@ -140,7 +140,12 @@ vi.mock("vscode", () => ({
 }));
 
 import { Projects, validProjectName } from "../src/projects.js";
-import { AdapterError, readProjectDefinition } from "@dryas/engine-adapter";
+import {
+  AdapterError,
+  readProjectDefinition,
+  readProjectSnapshot,
+  writeProjectDefinition,
+} from "@dryas/engine-adapter";
 import { ProjectTree, type ContentNode } from "../src/project-tree.js";
 let root: string;
 let projects: Projects;
@@ -450,4 +455,68 @@ it("adds a relative reference using both projects' source scopes and removes it 
   } finally {
     tree.dispose();
   }
+});
+
+it.each([false, true])(
+  "references an external folder without opening or modifying it (configured: %s)",
+  async (configured) => {
+    const a = join(root, "A"),
+      b = join(root, "External");
+    await mkdir(a);
+    await mkdir(join(b, "library"), { recursive: true });
+    await writeFile(join(b, "library/types.sysml"), "package Shared;");
+    let metadata: string | undefined;
+    if (configured) {
+      await writeProjectDefinition(b, { version: 1, modelRoots: ["library"], references: [] });
+      metadata = await readFile(join(b, ".systrace/project.json"), "utf8");
+      await writeFile(join(b, "outside.sysml"), "outside source scope");
+    }
+    await projects.open(host.uri(a) as unknown as import("vscode").Uri);
+    const consumer = projects.current!;
+    // With one project, the command opens the folder dialog directly.
+    host.dialogs.push([host.uri(b)]);
+    await host.commands.get("dryas.addProjectReference")!(consumer);
+    expect(host.errors).toEqual([]);
+    expect(projects.folders).toEqual([consumer]);
+    expect(projects.current).toBe(consumer);
+    expect((await readProjectDefinition(a)).references).toEqual(["../External"]);
+    const snapshot = await readProjectSnapshot(a);
+    expect(snapshot.documents.map((document) => document.name)).toEqual([
+      ".references/..%2FExternal/library/types.sysml",
+    ]);
+    if (configured)
+      expect(await readFile(join(b, ".systrace/project.json"), "utf8")).toBe(metadata);
+    else await expect(access(join(b, ".systrace"))).rejects.toMatchObject({ code: "ENOENT" });
+  },
+);
+
+it("offers an external folder alongside open projects and handles cancellation without changing configuration", async () => {
+  const a = join(root, "A"),
+    b = join(root, "B"),
+    external = join(root, "External");
+  for (const folder of [a, b, external]) await mkdir(folder);
+  await projects.open(host.uri(a) as unknown as import("vscode").Uri);
+  const consumer = projects.current!;
+  await projects.open(host.uri(b) as unknown as import("vscode").Uri);
+  await projects.addReference(consumer); // Cancel the picker.
+  host.picks.push("Browse for Project Folder…");
+  await projects.addReference(consumer); // Cancel the folder dialog.
+  await expect(access(join(a, ".systrace/project.json"))).rejects.toMatchObject({ code: "ENOENT" });
+  host.picks.push("Browse for Project Folder…");
+  host.dialogs.push([host.uri(external)]);
+  await projects.addReference(consumer);
+  expect(host.errors).toEqual([]);
+  expect((await readProjectDefinition(a)).references).toEqual(["../External"]);
+  expect(projects.folders).toHaveLength(2);
+  expect(projects.current?.uri.fsPath).toBe(b);
+});
+
+it("rejects selecting the consuming folder as its own reference before writing configuration", async () => {
+  await projects.open(host.uri(root) as unknown as import("vscode").Uri);
+  host.dialogs.push([host.uri(root)]);
+  await projects.addReference();
+  expect(host.errors).toEqual(["A project cannot reference itself."]);
+  await expect(access(join(root, ".systrace/project.json"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
 });

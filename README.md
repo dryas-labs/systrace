@@ -38,7 +38,7 @@ See [Language engine](docs/language-engine.md) for the current selection.
 source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
 it does not bundle the engine or its standard library.
 
-Version 0.1.13 uses `v0.9.2-dryas.5`. Selected completion details show the native
+Version 0.1.14 uses `v0.9.2-dryas.5`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
 complete `doc`. Update the VSIX and both external executables together. If you
 set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.5` too.
@@ -213,8 +213,10 @@ elements, folders, KerML files and read-only library nodes.
 
 ## Project references
 
-Open both projects, then right-click the consuming project and choose **Add Project
-Reference…**. Choose the project that supplies model definitions. **Project References**
+Right-click the consuming project and choose **Add Project Reference…**. Select an open
+project or **Browse for Project Folder…** to choose an external project folder. With no
+other project open, the folder dialog appears directly. External references do not add
+workspace folders or change the current project. **Project References**
 shows direct and transitive references. Referenced files open read-only in the consumer's
 language context; **Open Referenced Project** opens the owning project for editing.
 **Remove Project Reference** removes the relationship, not the referenced files. A dependency
@@ -222,7 +224,9 @@ remains available when its project is closed in the workspace.
 
 Project source folders and references are stored in `.systrace/project.json` with relative
 paths. New projects create this file. Adding a reference initializes missing configuration
-for both open projects using their current source folders. **Configure Model Source Folders**
+for open projects using their current source folders. External folders are left unchanged:
+their existing project configuration supplies the scope, or the entire folder is used
+when no configuration exists. **Configure Model Source Folders**
 also writes this file. It takes precedence over the legacy `dryas.modelRoots` setting and
 MCP's `--model-root` fallback. Engine executable paths stay in local editor configuration.
 

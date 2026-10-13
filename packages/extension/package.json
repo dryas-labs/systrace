@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
