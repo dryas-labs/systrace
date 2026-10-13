@@ -7,8 +7,8 @@ import {
   type ProjectNode,
 } from "./project-tree.js";
 import { resolveModelRoots, publicError, AdapterError } from "@dryas/engine-adapter";
-import { mkdir, realpath, stat, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, join, relative, sep } from "node:path";
+import { lstat, mkdir, realpath, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path";
 
 export interface ProjectStatus {
   connection: string;
@@ -95,6 +95,9 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
       ),
       vscode.commands.registerCommand("dryas.closeProject", (folder?: vscode.WorkspaceFolder) =>
         this.close(folder),
+      ),
+      vscode.commands.registerCommand("dryas.deleteNamespace", (node?: ProjectNode) =>
+        this.deleteNamespace(node),
       ),
     );
   }
@@ -336,6 +339,78 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
         (error as NodeJS.ErrnoException).code === "EEXIST"
           ? "A file with this name already exists. Choose a different namespace name."
           : publicError(error).message,
+      );
+    }
+  }
+
+  async deleteNamespace(requested?: ProjectNode): Promise<void> {
+    if (
+      !requested ||
+      !isContentNode(requested) ||
+      requested.nodeType !== "file" ||
+      requested.uri?.scheme !== "file" ||
+      extname(requested.uri.fsPath).toLowerCase() !== ".sysml"
+    )
+      return;
+    const folder = this.resolve(requested.folder);
+    if (!folder) return;
+    const uri = requested.uri;
+    const verifyTarget = async () => {
+      if (!this.resolve(folder))
+        throw new AdapterError(
+          "PROJECT_CHANGED",
+          "The project was closed before deletion. No file was deleted.",
+        );
+      const roots = await resolveModelRoots(
+        folder.uri.fsPath,
+        vscode.workspace.getConfiguration("dryas", folder.uri).get<string[]>("modelRoots", ["."]),
+      );
+      const [directory] = await resolveModelRoots(folder.uri.fsPath, [
+        relative(folder.uri.fsPath, dirname(uri.fsPath)) || ".",
+      ]);
+      const file = await lstat(uri.fsPath);
+      if (
+        !file.isFile() ||
+        file.isSymbolicLink() ||
+        !directory ||
+        !roots.some((source) => {
+          const path = relative(source, directory);
+          return !isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`);
+        })
+      )
+        throw new AdapterError(
+          "INVALID_PATH",
+          "Choose a .sysml file inside this project's model sources.",
+        );
+    };
+    try {
+      await verifyTarget();
+      const cancel = { title: "Cancel", isCloseAffordance: true };
+      const remove = { title: "Delete" };
+      const dirty = vscode.workspace.textDocuments.some(
+        (document) => document.uri.toString() === uri.toString() && document.isDirty,
+      );
+      const choice = await vscode.window.showWarningMessage(
+        `Delete namespace file "${basename(uri.fsPath)}"?`,
+        {
+          modal: true,
+          detail: `Project: ${folder.name}\nFile: ${relative(folder.uri.fsPath, uri.fsPath).split(sep).join("/")}\n\nThe entire .sysml file will be deleted, including all declarations it contains.${dirty ? "\nThis file has unsaved changes." : ""}`,
+        },
+        cancel,
+        remove,
+      );
+      if (choice !== remove) return;
+      await verifyTarget();
+      const edit = new vscode.WorkspaceEdit();
+      edit.deleteFile(uri, { recursive: false, ignoreIfNotExists: false });
+      if (!(await vscode.workspace.applyEdit(edit))) return;
+      this.contents?.refresh();
+      this.refresh();
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        error instanceof AdapterError
+          ? error.message
+          : "The namespace file could not be deleted. Check that it still exists and is writable.",
       );
     }
   }

@@ -264,6 +264,44 @@ export async function run(): Promise<void> {
     0,
     "Generated namespaces must pass native validation",
   );
+  const requirements = sourceFolders.find((node) => node.label === "requirements")!;
+  const removable = (await children(requirements)).find((node) => node.label === "Hello.sysml")!;
+  assert.equal(tree.getTreeItem(removable).contextValue, "systraceNamespaceFile");
+  assert(
+    manifest.contributes.menus["view/item/context"].some(
+      (item: { command: string; when: string }) =>
+        item.command === "dryas.deleteNamespace" && item.when.includes("systraceNamespaceFile"),
+    ),
+  );
+  const removableUri = removable.uri!;
+  assert.equal(vscode.workspace.getWorkspaceFolder(removableUri)?.uri.toString(), c.uri.toString());
+  await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(removableUri));
+  // Confirmation/Cancel paths are exercised in project command tests. Here the
+  // real editor file operation verifies tree and language-service propagation.
+  const deletion = new vscode.WorkspaceEdit();
+  deletion.deleteFile(removableUri, { recursive: false, ignoreIfNotExists: false });
+  assert(await vscode.workspace.applyEdit(deletion));
+  await assert.rejects(async () => vscode.workspace.fs.stat(removableUri));
+  await eventually(
+    () => children(requirements),
+    (nodes) => !nodes.some((node) => node.label === "Hello.sysml"),
+  );
+  await eventually(
+    () =>
+      vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+        "vscode.executeWorkspaceSymbolProvider",
+        "Hello",
+      ),
+    (symbols) =>
+      !symbols?.some((symbol) => symbol.location.uri.toString() === removableUri.toString()),
+  );
+  await vscode.commands.executeCommand("dryas.validateProject", c);
+  const afterDeletion = JSON.parse(vscode.window.activeTextEditor!.document.getText());
+  assert(
+    !afterDeletion.content.files.some(
+      (file: { file: string }) => file.file === "requirements/Hello.sysml",
+    ),
+  );
   await vscode.commands.executeCommand("dryas.closeProject", c);
   await eventually(
     async () => state.getLanguageServiceStatus(),
@@ -271,6 +309,6 @@ export async function run(): Promise<void> {
   );
   await vscode.workspace.fs.stat(third);
   console.log(
-    "DRYAS host checks passed: flat project sources, named source folders, LSP-checked namespace spellings, dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
+    "DRYAS host checks passed: namespace-file deletion propagation, flat project sources, named source folders, LSP-checked namespace spellings, dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
   );
 }

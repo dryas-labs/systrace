@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
 import { lstat, readdir } from "node:fs/promises";
-import { basename, join, relative, sep } from "node:path";
+import { basename, extname, join, relative, sep } from "node:path";
 import { publicError, resolveModelRoots } from "@dryas/engine-adapter";
 
 export interface LibraryNamespace {
@@ -247,7 +247,12 @@ export class ProjectTree implements vscode.Disposable {
       leaf ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
     );
     item.id = node.id;
-    item.contextValue = `systrace${node.nodeType}`;
+    item.contextValue =
+      node.nodeType === "file" &&
+      node.uri?.scheme === "file" &&
+      extname(node.uri.fsPath).toLowerCase() === ".sysml"
+        ? "systraceNamespaceFile"
+        : `systrace${node.nodeType}`;
     const icons: Record<ContentNode["nodeType"], string> = {
       source: "root-folder",
       directory: "folder",

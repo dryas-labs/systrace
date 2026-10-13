@@ -38,7 +38,7 @@ See [Language engine](docs/language-engine.md) for the current selection.
 source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
 it does not bundle the engine or its standard library.
 
-Version 0.1.11 uses `v0.9.2-dryas.5`. Selected completion details show the native
+Version 0.1.12 uses `v0.9.2-dryas.5`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
 complete `doc`. Update the VSIX and both external executables together. If you
 set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.5` too.
@@ -202,3 +202,10 @@ context menu does not change the current project or existing MCP bindings.
 Names containing an apostrophe currently cannot pass this creation check when the
 language service returns an escaped label instead of the requested name. The action
 reports that it could not confirm the name and leaves the project files unchanged.
+
+To remove a namespace file, right-click its `.sysml` file node and choose
+**Delete Namespace…**. A modal confirmation shows the project and relative file
+path. Only **Delete** proceeds; cancelling or closing the dialog keeps the file.
+The entire file and all declarations in it are removed through the editor's file
+operation. The tree refreshes after deletion. This action is unavailable on model
+elements, folders, KerML files and read-only library nodes.

@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -127,6 +127,11 @@
         "command": "dryas.newNamespaceInFolder",
         "title": "DRYAS: New Namespace…",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "dryas.deleteNamespace",
+        "title": "DRYAS: Delete Namespace…",
+        "icon": "$(trash)"
       }
     ],
     "configuration": {
@@ -238,6 +243,11 @@
           "command": "dryas.closeProject",
           "when": "view == systrace.projects && viewItem == systraceProject",
           "group": "3_close"
+        },
+        {
+          "command": "dryas.deleteNamespace",
+          "when": "view == systrace.projects && viewItem == systraceNamespaceFile",
+          "group": "3_delete"
         }
       ],
       "explorer/context": [
@@ -250,6 +260,10 @@
       "commandPalette": [
         {
           "command": "dryas.newNamespaceInFolder",
+          "when": "false"
+        },
+        {
+          "command": "dryas.deleteNamespace",
           "when": "false"
         }
       ]

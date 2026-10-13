@@ -33,7 +33,7 @@ VSIX 输出在 `artifacts/`。在 VS Code 或 Cursor 中执行 **Extensions: Ins
 
 [config/engine.json](config/engine.json) 记录开发引擎的版本和源码提交。
 本版 VSIX 使用外部的 `sysml-lsp` 与 `sysml-grpc`，不包含引擎二进制或标准库。
-0.1.11 使用 `v0.9.2-dryas.5`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
+0.1.12 使用 `v0.9.2-dryas.5`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
 源文件名和完整的 `doc`。升级时需要同时更新 VSIX 和两个外部引擎程序；如果手动填写过
 `dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.5`。
 安装所配置 language engine 需要的构建工具链后，可以运行：
@@ -162,3 +162,8 @@ DRYAS 自有代码采用 [Apache License 2.0](LICENSE)。源码中的
 
 当前语言服务会以转义形式返回名称内的单引号，这类名称暂时不能通过创建检查。
 操作会提示无法确认名称，并保持项目文件不变。
+
+删除命名空间文件时，右键对应的 `.sysml` 文件节点，选择 **Delete Namespace…**。
+确认框会显示所属项目和相对文件路径；只有再次选择 **Delete** 才会执行。
+取消或关闭确认框会保留文件。操作通过编辑器删除整个文件及其中全部声明，随后刷新项目树。
+模型元素、文件夹、KerML 文件和只读标准库节点不提供此操作。

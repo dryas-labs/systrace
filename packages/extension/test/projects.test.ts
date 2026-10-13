@@ -19,6 +19,19 @@ const host = vi.hoisted(() => {
     opened: [] as string[],
     picks: [] as string[],
     errors: [] as string[],
+    confirmations: [] as (string | undefined)[],
+    deleted: [] as string[],
+    textDocuments: [] as { uri: ReturnType<typeof uri>; isDirty: boolean }[],
+    warning: vi.fn(
+      async (
+        _message: string,
+        _options: { modal: boolean; detail: string },
+        ...items: { title: string; isCloseAffordance?: boolean }[]
+      ) => {
+        const response = host.confirmations.shift();
+        return items.find((item) => item.title === response);
+      },
+    ),
     prepare: vi.fn(async (_folder: unknown, name: string) => {
       const sources: Record<string, string> = {
         Electrical: "package Electrical {\n\n}\n",
@@ -32,6 +45,18 @@ const host = vi.hoisted(() => {
 vi.mock("vscode", () => ({
   Uri: { file: host.uri },
   Range: class {},
+  WorkspaceEdit: class {
+    deletes: {
+      uri: ReturnType<typeof host.uri>;
+      options: { recursive: boolean; ignoreIfNotExists: boolean };
+    }[] = [];
+    deleteFile(
+      uri: ReturnType<typeof host.uri>,
+      options: { recursive: boolean; ignoreIfNotExists: boolean },
+    ) {
+      this.deletes.push({ uri, options });
+    }
+  },
   ProgressLocation: { Window: 10 },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1 },
   RelativePattern: class {},
@@ -47,6 +72,7 @@ vi.mock("vscode", () => ({
   window: {
     createTreeView: () => ({ dispose() {} }),
     showInputBox: async () => host.names.shift(),
+    showWarningMessage: host.warning,
     withProgress: async (_options: unknown, run: () => Promise<unknown>) => run(),
     showOpenDialog: async () => host.dialogs.shift(),
     showQuickPick: async (items: { label: string; directory: string }[]) => {
@@ -62,6 +88,23 @@ vi.mock("vscode", () => ({
   workspace: {
     get workspaceFolders() {
       return host.folders;
+    },
+    get textDocuments() {
+      return host.textDocuments;
+    },
+    applyEdit: async (edit: {
+      deletes: {
+        uri: ReturnType<typeof host.uri>;
+        options: { recursive: boolean; ignoreIfNotExists: boolean };
+      }[];
+    }) => {
+      const { unlink } = await import("node:fs/promises");
+      for (const deletion of edit.deletes) {
+        expect(deletion.options).toEqual({ recursive: false, ignoreIfNotExists: false });
+        await unlink(deletion.uri.fsPath);
+        host.deleted.push(deletion.uri.fsPath);
+      }
+      return true;
     },
     onDidChangeWorkspaceFolders: (fn: () => void) => {
       host.changes.add(fn);
@@ -109,6 +152,10 @@ beforeEach(async () => {
   host.opened.length = 0;
   host.picks.length = 0;
   host.errors.length = 0;
+  host.confirmations.length = 0;
+  host.deleted.length = 0;
+  host.textDocuments.length = 0;
+  host.warning.mockClear();
   host.prepare.mockClear();
   host.state.clear();
   root = await mkdtemp(join(tmpdir(), "systrace-project-ui-"));
@@ -291,4 +338,80 @@ it("does not create a file when the language service cannot finish namespace che
   await expect(access(join(root, "Unconfirmed.sysml"))).rejects.toMatchObject({ code: "ENOENT" });
   expect(host.opened).toEqual([]);
   expect(host.errors).toEqual(["Namespace checking timed out."]);
+});
+
+function namespaceFile(folder: WorkspaceFolder, path: string): ContentNode {
+  return {
+    nodeType: "file",
+    id: path,
+    label: basename(path),
+    uri: host.uri(path) as unknown as import("vscode").Uri,
+    folder,
+    parent: folder,
+  };
+}
+
+it.each(["Cancel", undefined])(
+  "keeps the namespace file while awaiting confirmation and after %s",
+  async (response) => {
+    const path = join(root, "Keep.sysml");
+    await writeFile(path, "package Keep;");
+    await projects.open(host.uri(root) as unknown as import("vscode").Uri);
+    let answer!: () => void;
+    host.warning.mockImplementationOnce(
+      (_message, _options, ...items) =>
+        new Promise((resolve) => {
+          answer = () => resolve(items.find((item) => item.title === response));
+        }),
+    );
+    const pending = host.commands.get("dryas.deleteNamespace")!(
+      namespaceFile(projects.current!, path),
+    );
+    await vi.waitFor(() => expect(host.warning).toHaveBeenCalledOnce());
+    await expect(access(path)).resolves.toBeUndefined();
+    expect(host.deleted).toEqual([]);
+    expect(host.warning.mock.calls[0]![1].modal).toBe(true);
+    expect(host.warning.mock.calls[0]![1].detail).toContain("File: Keep.sysml");
+    answer();
+    await pending;
+    expect(await readFile(path, "utf8")).toBe("package Keep;");
+    expect(host.deleted).toEqual([]);
+  },
+);
+
+it("deletes only the confirmed file in its owning project and preserves the current project", async () => {
+  const a = join(root, "A"),
+    b = join(root, "B");
+  await mkdir(a);
+  await mkdir(b);
+  const target = join(a, "Remove.sysml"),
+    other = join(b, "Remove.sysml");
+  await writeFile(target, "package First; package Second;");
+  await writeFile(other, "package Keep;");
+  await projects.open(host.uri(a) as unknown as import("vscode").Uri);
+  const folder = projects.current!;
+  await projects.open(host.uri(b) as unknown as import("vscode").Uri);
+  host.textDocuments.push({ uri: host.uri(target), isDirty: true });
+  host.confirmations.push("Delete");
+  await host.commands.get("dryas.deleteNamespace")!(namespaceFile(folder, target));
+  expect(host.warning.mock.calls[0]![1].detail).toContain("Project: A");
+  expect(host.warning.mock.calls[0]![1].detail).toContain("all declarations");
+  expect(host.warning.mock.calls[0]![1].detail).toContain("unsaved changes");
+  expect(host.deleted).toEqual([target]);
+  await expect(access(target)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(await readFile(other, "utf8")).toBe("package Keep;");
+  expect(projects.current?.uri.fsPath).toBe(b);
+});
+
+it("does not offer file deletion for model elements, library nodes or KerML files", async () => {
+  await projects.open(host.uri(root) as unknown as import("vscode").Uri);
+  const folder = projects.current!;
+  const path = join(root, "Keep.sysml");
+  await writeFile(path, "package Keep;");
+  for (const nodeType of ["element", "namespace", "directory"] as const)
+    await projects.deleteNamespace({ ...namespaceFile(folder, path), nodeType });
+  await projects.deleteNamespace(namespaceFile(folder, join(root, "Keep.kerml")));
+  expect(host.warning).not.toHaveBeenCalled();
+  expect(host.deleted).toEqual([]);
+  await expect(access(path)).resolves.toBeUndefined();
 });

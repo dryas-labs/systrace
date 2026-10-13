@@ -5,7 +5,7 @@
 SysML v2 editing for VS Code and Cursor, powered by an external language engine.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.11 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
+Version 0.1.12 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
@@ -155,3 +155,10 @@ context menu does not change the current project or existing MCP bindings.
 Names containing an apostrophe currently cannot pass this creation check when the
 language service returns an escaped label instead of the requested name. The action
 reports that it could not confirm the name and leaves the project files unchanged.
+
+To remove a namespace file, right-click its `.sysml` file node and choose
+**Delete Namespace…**. A modal confirmation shows the project and relative file
+path. Only **Delete** proceeds; cancelling or closing the dialog keeps the file.
+The entire file and all declarations in it are removed through the editor's file
+operation. The tree refreshes after deletion. This action is unavailable on model
+elements, folders, KerML files and read-only library nodes.
