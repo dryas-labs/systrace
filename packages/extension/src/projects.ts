@@ -6,7 +6,15 @@ import {
   type ProjectBrowser,
   type ProjectNode,
 } from "./project-tree.js";
-import { resolveModelRoots, publicError, AdapterError } from "@dryas/engine-adapter";
+import {
+  resolveModelRoots,
+  publicError,
+  AdapterError,
+  readProjectDefinition,
+  writeProjectDefinition,
+  resolveProjectGraph,
+  referencePath,
+} from "@dryas/engine-adapter";
 import { lstat, mkdir, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path";
 
@@ -60,6 +68,7 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
       folder: vscode.WorkspaceFolder,
       name: string,
     ) => Promise<string>,
+    private readonly scopeChanged?: () => Promise<void>,
   ) {
     this.selected = context.workspaceState.get<string>("dryas.currentProject");
     if (browser) {
@@ -99,6 +108,16 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
       vscode.commands.registerCommand("dryas.deleteNamespace", (node?: ProjectNode) =>
         this.deleteNamespace(node),
       ),
+      vscode.commands.registerCommand("dryas.addProjectReference", (node?: ProjectNode) =>
+        this.addReference(node),
+      ),
+      vscode.commands.registerCommand("dryas.removeProjectReference", (node: ProjectNode) =>
+        this.removeReference(node),
+      ),
+      vscode.commands.registerCommand("dryas.openReferencedProject", (node: ProjectNode) => {
+        if (isContentNode(node) && node.referenceRoot)
+          return this.open(vscode.Uri.file(node.referenceRoot));
+      }),
     );
   }
 
@@ -227,6 +246,7 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
         }
       }
       await mkdir(root);
+      await writeProjectDefinition(root, { version: 1, modelRoots: ["."], references: [] });
       await this.add(vscode.Uri.file(root), name);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
@@ -260,6 +280,95 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
     }
   }
 
+  private definition(folder: vscode.WorkspaceFolder) {
+    return readProjectDefinition(
+      folder.uri.fsPath,
+      vscode.workspace.getConfiguration("dryas", folder.uri).get<string[]>("modelRoots", ["."]),
+    );
+  }
+
+  async addReference(requested?: ProjectNode, target?: vscode.WorkspaceFolder): Promise<void> {
+    if (requested && isContentNode(requested) && requested.readOnly) return;
+    const folder = this.resolve(
+      requested && isContentNode(requested) ? requested.folder : requested,
+    );
+    if (!folder) return;
+    if (!target) {
+      const candidates = this.folders.filter(
+        (other) => other.uri.toString() !== folder.uri.toString(),
+      );
+      if (!candidates.length) {
+        void vscode.window.showInformationMessage(
+          "Open another Systrace project before adding a project reference.",
+        );
+        return;
+      }
+      target = (
+        await vscode.window.showQuickPick(
+          candidates.map((project) => ({
+            label: project.name,
+            description: project.uri.fsPath,
+            project,
+          })),
+          { placeHolder: `Reference a project from ${folder.name}` },
+        )
+      )?.project;
+    }
+    if (!target || !this.resolve(target)) return;
+    try {
+      const [base, dependency] = await Promise.all([
+        realpath(folder.uri.fsPath),
+        realpath(target.uri.fsPath),
+      ]);
+      const [definition, targetDefinition] = await Promise.all([
+        this.definition(folder),
+        this.definition(target),
+      ]);
+      const path = referencePath(base, dependency);
+      const next = { ...definition, references: [...new Set([...definition.references, path])] };
+      await resolveProjectGraph(
+        base,
+        definition.modelRoots,
+        new Map([
+          [base, next],
+          [dependency, targetDefinition],
+        ]),
+      );
+      if (!this.resolve(folder) || !this.resolve(target)) return;
+      await writeProjectDefinition(dependency, targetDefinition, true);
+      await writeProjectDefinition(base, next);
+      this.contents?.refresh();
+      this.refresh();
+      await this.scopeChanged?.();
+    } catch (error) {
+      void vscode.window.showErrorMessage(publicError(error).message);
+    }
+  }
+
+  async removeReference(node: ProjectNode): Promise<void> {
+    if (
+      !isContentNode(node) ||
+      node.nodeType !== "reference" ||
+      !node.referencePath ||
+      node.transitive
+    )
+      return;
+    const folder = this.resolve(node.folder);
+    if (!folder) return;
+    try {
+      const definition = await this.definition(folder);
+      await writeProjectDefinition(folder.uri.fsPath, {
+        ...definition,
+        references: definition.references.filter((path) => path !== node.referencePath),
+      });
+      this.contents?.refresh();
+      this.refresh();
+      await this.scopeChanged?.();
+    } catch (error) {
+      void vscode.window.showErrorMessage(publicError(error).message);
+    }
+  }
+
   async prepareNamespace(folder: vscode.WorkspaceFolder, name: string): Promise<string> {
     if (!this.resolve(folder) || !this.namespacePreparation)
       throw new AdapterError(
@@ -282,7 +391,7 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
     try {
       const roots = await resolveModelRoots(
         folder.uri.fsPath,
-        vscode.workspace.getConfiguration("dryas", folder.uri).get<string[]>("modelRoots", ["."]),
+        (await this.definition(folder)).modelRoots,
       );
       let directory: string | undefined;
       if (node) {
@@ -363,7 +472,7 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
         );
       const roots = await resolveModelRoots(
         folder.uri.fsPath,
-        vscode.workspace.getConfiguration("dryas", folder.uri).get<string[]>("modelRoots", ["."]),
+        (await this.definition(folder)).modelRoots,
       );
       const [directory] = await resolveModelRoots(folder.uri.fsPath, [
         relative(folder.uri.fsPath, dirname(uri.fsPath)) || ".",

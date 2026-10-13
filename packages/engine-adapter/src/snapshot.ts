@@ -11,6 +11,8 @@ export interface ModelDocument {
 export interface Snapshot {
   roots: string[];
   documents: ModelDocument[];
+  scopeKey?: string;
+  references?: import("./project-graph.js").ReferenceSummary[];
 }
 const maxFiles = 2000;
 const maxBytes = 32 * 1024 * 1024;
@@ -160,6 +162,7 @@ export async function readSnapshot(
 
 export function sameSnapshot(a: Snapshot, b: Snapshot): boolean {
   return (
+    a.scopeKey === b.scopeKey &&
     a.roots.length === b.roots.length &&
     a.roots.every((r, i) => r === b.roots[i]) &&
     a.documents.length === b.documents.length &&

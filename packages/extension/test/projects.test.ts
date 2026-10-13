@@ -140,7 +140,7 @@ vi.mock("vscode", () => ({
 }));
 
 import { Projects, validProjectName } from "../src/projects.js";
-import { AdapterError } from "@dryas/engine-adapter";
+import { AdapterError, readProjectDefinition } from "@dryas/engine-adapter";
 import { ProjectTree, type ContentNode } from "../src/project-tree.js";
 let root: string;
 let projects: Projects;
@@ -249,6 +249,7 @@ it("shows root files directly under the project and configured source folders by
     expect((await tree.children(folder)).map((node) => node.label)).toEqual([
       "architecture",
       "requirements",
+      "Project References",
       "Standard Library",
     ]);
   } finally {
@@ -414,4 +415,39 @@ it("does not offer file deletion for model elements, library nodes or KerML file
   expect(host.warning).not.toHaveBeenCalled();
   expect(host.deleted).toEqual([]);
   await expect(access(path)).resolves.toBeUndefined();
+});
+
+it("adds a relative reference using both projects' source scopes and removes it without deleting the target", async () => {
+  const a = join(root, "A"),
+    b = join(root, "B");
+  await mkdir(a);
+  await mkdir(join(b, "library"), { recursive: true });
+  await writeFile(join(b, "library/components.sysml"), "package Components;");
+  await projects.open(host.uri(a) as unknown as import("vscode").Uri);
+  const consumer = projects.current!;
+  await projects.open(host.uri(b) as unknown as import("vscode").Uri);
+  const dependency = projects.current!;
+  host.roots.set(b, ["library"]);
+  await projects.addReference(consumer, dependency);
+  await projects.addReference(consumer, dependency);
+  expect(host.errors).toEqual([]);
+  expect(await readProjectDefinition(a)).toMatchObject({ modelRoots: ["."], references: ["../B"] });
+  expect(await readProjectDefinition(b)).toMatchObject({ modelRoots: ["library"], references: [] });
+  expect(projects.current).toBe(dependency);
+  await projects.addReference(dependency, consumer);
+  expect(host.errors.at(-1)).toContain("cycle");
+  const tree = new ProjectTree(
+    { symbols: async () => [], libraries: async () => [], refreshLibraries() {} },
+    () => {},
+  );
+  try {
+    const group = (await tree.children(consumer)).find((n) => n.nodeType === "references")!;
+    const node = (await tree.children(group))[0]!;
+    expect(tree.item(node).contextValue).toBe("systraceProjectReference");
+    await projects.removeReference(node);
+    expect((await readProjectDefinition(a)).references).toEqual([]);
+    await expect(access(join(b, "library/components.sysml"))).resolves.toBeUndefined();
+  } finally {
+    tree.dispose();
+  }
 });

@@ -238,7 +238,7 @@ export async function run(): Promise<void> {
   const sourceFolders = await children(c);
   assert.deepEqual(
     sourceFolders.map((node) => node.label),
-    ["architecture", "requirements", "Standard Library"],
+    ["architecture", "requirements", "Project References", "Standard Library"],
   );
   for (const [directory, name] of cases) {
     const folder = sourceFolders.find((node) => node.label === directory)!;

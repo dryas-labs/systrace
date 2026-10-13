@@ -5,9 +5,10 @@ import {
   AdapterError,
   type LanguageServiceBackend,
   type ProjectOptions,
+  type ProjectGraph,
 } from "@dryas/engine-adapter";
 
-export type ProjectConfig = ProjectOptions & { lspPath: string };
+export type ProjectConfig = ProjectOptions & { lspPath: string; graph?: ProjectGraph };
 export type StartupStage = "configuration" | "model-folders" | "version-check" | "lsp-initialize";
 
 export function sameConfig(a: ProjectConfig, b: ProjectConfig): boolean {
@@ -17,6 +18,7 @@ export function sameConfig(a: ProjectConfig, b: ProjectConfig): boolean {
 export function sameLanguageConfig(a: ProjectConfig, b: ProjectConfig): boolean {
   return (
     a.projectRoot === b.projectRoot &&
+    a.graph?.key === b.graph?.key &&
     a.lspPath === b.lspPath &&
     a.engine.expectedVersion === b.engine.expectedVersion &&
     a.engine.timeoutMs === b.engine.timeoutMs &&
@@ -38,7 +40,7 @@ export function startupError(error: unknown, stage: StartupStage): AdapterError 
   if (stage === "model-folders" && error instanceof AdapterError && error.code === "INVALID_PATH")
     return new AdapterError(
       error.code,
-      `${error.message} Set dryas.modelRoots in Workspace Folder Settings to existing source folders relative to the opened workspace folder. The default is ["."]; configure narrower source folders when needed.`,
+      `${error.message} Use Configure Model Source Folders or check modelRoots in .systrace/project.json; without that file, dryas.modelRoots in Workspace Folder Settings is the fallback. Source folders must exist inside the project. The default is ["."]; configure narrower source folders when needed.`,
     );
   if (error instanceof AdapterError) return error;
   const details = error && typeof error === "object" ? (error as Record<string, unknown>) : {};

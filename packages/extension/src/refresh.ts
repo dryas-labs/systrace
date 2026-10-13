@@ -7,7 +7,8 @@ export type RefreshReason =
   | "document-opened"
   | "manual-restart"
   | "validation"
-  | "engine-recovery";
+  | "engine-recovery"
+  | "dependency-deleted";
 
 // Keep one pending batch while a refresh runs. Read effective settings in the
 // callback, so a burst never queues restarts with obsolete configurations.

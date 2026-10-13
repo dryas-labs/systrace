@@ -29,7 +29,7 @@ const host = vi.hoisted(() => {
     logs: [] as string[],
     spawns: [] as { command: string; args: string[]; options: { env: NodeJS.ProcessEnv } }[],
     sessions: [] as { config: unknown; backend: unknown; close: ReturnType<typeof vi.fn> }[],
-    watchers: [] as { dispose: ReturnType<typeof vi.fn> }[],
+    watchers: [] as { pattern: string; dispose: ReturnType<typeof vi.fn> }[],
     failClientConstruction: false,
   };
 });
@@ -54,7 +54,12 @@ vi.mock("vscode", () => {
       fire() {}
       dispose() {}
     },
-    RelativePattern: class {},
+    RelativePattern: class {
+      constructor(
+        _root: unknown,
+        public pattern: string,
+      ) {}
+    },
     StatusBarAlignment: { Left: 1 },
     window: {
       createTreeView: () => ({ dispose() {} }),
@@ -78,8 +83,14 @@ vi.mock("vscode", () => {
       onDidChangeWorkspaceFolders: event("workspace"),
       onDidGrantWorkspaceTrust: event("trust"),
       onDidOpenTextDocument: event("document"),
-      createFileSystemWatcher: () => {
-        const watcher = { dispose: vi.fn() };
+      createFileSystemWatcher: (pattern: { pattern: string }) => {
+        const watcher = {
+          pattern: pattern.pattern,
+          dispose: vi.fn(),
+          onDidCreate() {},
+          onDidChange() {},
+          onDidDelete() {},
+        };
         host.watchers.push(watcher);
         return watcher;
       },
@@ -156,9 +167,39 @@ vi.mock("../src/stdlib.js", () => ({
   },
 }));
 
+function fixtureGraph(root: string, roots: string[] = ["."]) {
+  return {
+    key: JSON.stringify([root, roots]),
+    projects: [
+      {
+        root,
+        path: ".",
+        id: ".",
+        name: root,
+        roots: [root + "/model"],
+        definition: { version: 1, modelRoots: roots, references: [] },
+      },
+    ],
+  };
+}
+
 vi.mock("@dryas/engine-adapter", async (original) => ({
   ...(await original<typeof import("@dryas/engine-adapter")>()),
   readSnapshot: async (root: string) => ({ roots: [root + "/model"], documents: [] }),
+  resolveProjectGraph: async (
+    root: string,
+    roots: string[],
+    _overrides: unknown,
+    visit?: (root: string) => void,
+  ) => {
+    visit?.(root);
+    return fixtureGraph(root, roots);
+  },
+  readProjectSnapshot: async (root: string, roots: string[]) => ({
+    roots: [root + "/model"],
+    documents: [],
+    scopeKey: fixtureGraph(root, roots).key,
+  }),
   ProjectSession: class {
     close = vi.fn();
     constructor(
@@ -447,7 +488,7 @@ it("preserves an existing saved-model session when replacement provider creation
   }
 });
 
-it("does not allocate watchers or clients when the provider factory fails at startup", async () => {
+it("keeps only configuration watchers when the provider factory fails at startup", async () => {
   const { provider } = fixtureProvider();
   vi.mocked(provider.createBackend).mockImplementation(() => {
     throw new Error("private factory failure");
@@ -457,7 +498,7 @@ it("does not allocate watchers or clients when the provider factory fails at sta
     const ready = injected.refresh("activation");
     await vi.advanceTimersByTimeAsync(0);
     await ready;
-    expect(host.watchers).toHaveLength(0);
+    expect(host.watchers.filter((w) => w.pattern !== ".systrace/project.json")).toHaveLength(0);
     expect(host.clients).toHaveLength(0);
     expect(host.sessions).toHaveLength(0);
     expect(injected.getStatus().every((status) => status.connection === "error")).toBe(true);
@@ -476,9 +517,13 @@ it("disposes sessions and watchers when language-client construction fails after
     await vi.advanceTimersByTimeAsync(0);
     await ready;
     expect(host.sessions).toHaveLength(2);
-    expect(host.watchers).toHaveLength(2);
+    expect(host.watchers.filter((w) => w.pattern !== ".systrace/project.json")).toHaveLength(2);
     expect(host.sessions.every((session) => session.close.mock.calls.length === 1)).toBe(true);
-    expect(host.watchers.every((watcher) => watcher.dispose.mock.calls.length === 1)).toBe(true);
+    expect(
+      host.watchers
+        .filter((w) => w.pattern !== ".systrace/project.json")
+        .every((watcher) => watcher.dispose.mock.calls.length === 1),
+    ).toBe(true);
     expect(host.clients).toHaveLength(0);
     expect(host.logs.join("\n")).not.toContain("private client constructor detail");
   } finally {

@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   });
   if (values.help) {
     process.stdout.write(
-      "dryas-mcp --project <folder> [--engine <sysml-grpc>] [--model-root .] [--expected-version <version>]\n",
+      "dryas-mcp --project <folder> [--engine <sysml-grpc>] [--model-root .] [--expected-version <version>]\nProject references and source folders are read from .systrace/project.json when present.\n",
     );
     return;
   }

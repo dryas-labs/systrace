@@ -25,7 +25,7 @@ export function createServer(
     {
       title: "Validate saved SysML project",
       description:
-        "Validate every saved SysML/KerML source in the configured project folders. Paths filter listed diagnostics, not validation. No files are changed. Incomplete means validation coverage is not certified, even with no diagnostics. This is not proof of engineering correctness.",
+        "Validate every saved SysML/KerML source in the project and its declared project references. Paths filter listed diagnostics, not validation. No files are changed. Incomplete means validation coverage is not certified, even with no diagnostics. This is not proof of engineering correctness.",
       inputSchema: {
         paths: z.array(z.string()).optional(),
         cursor: z.string().optional(),
@@ -72,7 +72,7 @@ export function createServer(
     {
       title: "Find saved model elements",
       description:
-        "Search the saved project by exact name, qualified name, native metamodel kind, scope, transitive specialization or metadata values. Names, inheritance and metadata are resolved by the selected language engine. All metadata predicates must match one annotation. Cursors are bound to a session, query and saved revision. Results may include diagnostics from an invalid model and do not certify engineering correctness.",
+        "Search the saved project and its declared project references by exact name, qualified name, native metamodel kind, scope, transitive specialization or metadata values. Names, inheritance and metadata are resolved by the selected language engine. All metadata predicates must match one annotation. Cursors are bound to a session, query and saved revision. Results may include diagnostics from an invalid model and do not certify engineering correctness.",
       inputSchema: findInputSchema,
       annotations,
     },

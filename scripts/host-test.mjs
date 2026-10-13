@@ -8,6 +8,7 @@ import { root, loadConfig } from "./config.mjs";
 const config = await loadConfig();
 const host = process.argv.includes("--cursor") ? "cursor" : "vscode";
 const projectChecks = process.argv.includes("--projects");
+const referenceChecks = process.argv.includes("--references");
 const executable =
   config.editors[host] ||
   (host === "vscode" ? await downloadAndUnzipVSCode(config.tests.vscodeVersion) : "");
@@ -48,6 +49,42 @@ if (projectChecks) {
       folders: [
         { path: a, name: "Project A" },
         { path: b, name: "Project B" },
+      ],
+    }),
+  );
+}
+if (referenceChecks) {
+  const a = resolve(workspace, "Consumer"),
+    b = resolve(workspace, "Components"),
+    c = resolve(workspace, "Foundation");
+  for (const folder of [a, b, c]) await mkdir(resolve(folder, ".systrace"), { recursive: true });
+  await mkdir(resolve(b, "library"));
+  for (const [folder, modelRoots, references] of [
+    [a, ["."], []],
+    [b, ["library"], ["../Foundation"]],
+    [c, ["."], []],
+  ])
+    await writeFile(
+      resolve(folder, ".systrace/project.json"),
+      JSON.stringify({ version: 1, modelRoots, references }),
+    );
+  await writeFile(
+    resolve(a, "system.sysml"),
+    "package System { private import Components::*; part battery : Battery; }\n",
+  );
+  await writeFile(
+    resolve(b, "library/components.sysml"),
+    "package Components { private import Foundation::*; part def Battery :> BaseBattery; }\n",
+  );
+  await writeFile(resolve(b, "excluded.sysml"), "This is outside the configured source folders.");
+  await writeFile(resolve(c, "base.sysml"), "package Foundation { part def BaseBattery; }\n");
+  workspaceTarget = resolve(workspace, "references.code-workspace");
+  await writeFile(
+    workspaceTarget,
+    JSON.stringify({
+      folders: [
+        { path: a, name: "Consumer" },
+        { path: b, name: "Components" },
       ],
     }),
   );
@@ -145,7 +182,7 @@ const args = [
   `--user-data-dir=${resolve(workspace, "profile")}`,
   `--extensions-dir=${resolve(workspace, "extensions")}`,
   `--extensionDevelopmentPath=${extensionPath}`,
-  `--extensionTestsPath=${resolve(root, projectChecks ? "test/host/dist/projects.cjs" : "test/host/dist/index.cjs")}`,
+  `--extensionTestsPath=${resolve(root, referenceChecks ? "test/host/dist/references.cjs" : projectChecks ? "test/host/dist/projects.cjs" : "test/host/dist/index.cjs")}`,
 ];
 let output = "";
 const code = await new Promise((done, reject) => {
@@ -186,5 +223,5 @@ await writeFile(resolve(workspace, "host.log"), output);
 if (code !== 0 || !output.includes("DRYAS host checks passed:"))
   throw new Error("Host checks failed. Inspect the ignored .tmp host-test log.");
 console.log(
-  `${host}: ${process.argv.includes("--vsix") ? "VSIX installation and " : ""}${projectChecks ? "project management and isolation" : "activation, language features and saved validation"} passed in an isolated extension host.`,
+  `${host}: ${process.argv.includes("--vsix") ? "VSIX installation and " : ""}${referenceChecks ? "project references and saved dependency updates" : projectChecks ? "project management and isolation" : "activation, language features and saved validation"} passed in an isolated extension host.`,
 );

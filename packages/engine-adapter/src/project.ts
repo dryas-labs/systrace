@@ -13,7 +13,8 @@ import {
 } from "./backend.js";
 import { createLanguageBackend } from "./provider.js";
 import { DEFAULT_LANGUAGE_ENGINE_PROVIDER } from "./default-engine.js";
-import { readSnapshot, relativeName, sameSnapshot, type Snapshot } from "./snapshot.js";
+import { relativeName, sameSnapshot, type Snapshot } from "./snapshot.js";
+import { readProjectSnapshot as readSnapshot, type ReferenceSummary } from "./project-graph.js";
 import {
   parseInput,
   findInputSchema,
@@ -60,6 +61,7 @@ export interface ValidationResult {
     sessionId: string;
     projectRevision: number;
     files: { file: string; revision: number }[];
+    references?: ReferenceSummary[];
   };
   project: Counts;
   scope: Counts & { paths: string[] };
@@ -255,6 +257,7 @@ export class ProjectSession {
       content: {
         sessionId: this.sessionId,
         projectRevision: this.revision,
+        ...(cached.snapshot.references?.length ? { references: cached.snapshot.references } : {}),
         files: cached.snapshot.documents.map((d) => ({
           file: d.name,
           revision: this.versions.get(d.name)!,

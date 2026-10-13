@@ -38,7 +38,7 @@ See [Language engine](docs/language-engine.md) for the current selection.
 source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
 it does not bundle the engine or its standard library.
 
-Version 0.1.12 uses `v0.9.2-dryas.5`. Selected completion details show the native
+Version 0.1.13 uses `v0.9.2-dryas.5`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
 complete `doc`. Update the VSIX and both external executables together. If you
 set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.5` too.
@@ -56,7 +56,7 @@ executables on PATH. Do not commit machine paths in workspace settings.
 ## Work with a project
 
 Open a trusted project folder and write `.sysml` or `.kerml` files in the project folder.
-Use `dryas.modelRoots` for other source folders. The extension provides completion,
+Use **Configure Model Source Folders** for other source folders. The extension provides completion,
 hover, cross-file definition navigation and live diagnostics.
 
 Press F12 on standard-library names such as `ISQ::voltage` or `ScalarValues::Integer`
@@ -149,17 +149,17 @@ change that selection. Other projects remain editable. Closing a project removes
 workspace entry and stops this extension's services, without deleting files or changing an
 external agent's existing MCP connection. Save the VS Code workspace to reopen its project list.
 
-Model files can live at the project root or in subfolders. `dryas.modelRoots` defaults to
-`["."]`; an explicitly configured value such as `["model"]` is still respected. Change or
-clear that setting if an older workspace should use the new default. Folder-scoped settings
-can narrow the source directories. Hidden folders and `node_modules` are excluded, matching
+Model files can live at the project root or in subfolders. Use **Configure Model Source
+Folders** to save the scope in `.systrace/project.json`. Existing projects without this file
+use `dryas.modelRoots`, defaulting to `["."]`; older explicit values such as `["model"]`
+remain effective until the shared project configuration is created. Hidden folders and `node_modules` are excluded, matching
 the language service. Other folders, including `designs`, can contain model sources; generated
 model files should live outside configured source roots. Custom glob exclusions are not
 provided by this version.
 
 Project roots must be separate, non-nested directories so two language services cannot own
 the same source. An overlapping workspace configuration is reported instead of loading a
-combined model. Projects do not automatically become one model or import one another.
+combined model. Opening projects does not create a dependency; use Add Project Reference to declare one.
 
 Right-click a project and choose **Show MCP Configuration** to generate a connection bound
 to that root and its configured model directories. A configuration already given to an agent
@@ -168,7 +168,8 @@ this extension does not create or retarget those conversations. The existing fou
 MCP tools are unchanged. Keep generated configurations containing local paths outside Git.
 
 For an isolated two-project check, run `npm run test:host -- --projects --vsix`; add `--cursor`
-to run the same check in the configured Cursor installation.
+to run the same check in the configured Cursor installation. Project-reference checks use
+`npm run test:host -- --references --vsix`.
 
 ## Project tree
 
@@ -209,3 +210,42 @@ path. Only **Delete** proceeds; cancelling or closing the dialog keeps the file.
 The entire file and all declarations in it are removed through the editor's file
 operation. The tree refreshes after deletion. This action is unavailable on model
 elements, folders, KerML files and read-only library nodes.
+
+## Project references
+
+Open both projects, then right-click the consuming project and choose **Add Project
+Reference…**. Choose the project that supplies model definitions. **Project References**
+shows direct and transitive references. Referenced files open read-only in the consumer's
+language context; **Open Referenced Project** opens the owning project for editing.
+**Remove Project Reference** removes the relationship, not the referenced files. A dependency
+remains available when its project is closed in the workspace.
+
+Project source folders and references are stored in `.systrace/project.json` with relative
+paths. New projects create this file. Adding a reference initializes missing configuration
+for both open projects using their current source folders. **Configure Model Source Folders**
+also writes this file. It takes precedence over the legacy `dryas.modelRoots` setting and
+MCP's `--model-root` fallback. Engine executable paths stay in local editor configuration.
+
+```json
+{
+  "version": 1,
+  "modelRoots": ["."],
+  "references": ["../SharedComponents"]
+}
+```
+
+The LSP, saved validation and MCP queries load the same dependency closure. Only saved
+changes in referenced projects propagate to consumers; unsaved work stays in the owning
+project's editing session. Saved dependency changes refresh consumer analysis and read-only
+tabs. Reference/source-configuration changes reconnect affected language services and close
+their old dependency tabs. Deleting a dependency source also reloads its consumers to
+remove cached declarations. Ordinary saved edits use file updates without restarting.
+Existing MCP connections keep their project root while reading
+updated project configuration on each request.
+
+A project reference makes source available; SysML `import` still controls namespace access.
+The engine resolves names and reports model conflicts. Project-reference cycles, missing
+folders and overlapping project roots are reported as project configuration errors; this
+version rejects reference cycles as a loading policy, not a SysML language rule. Projects
+must be on the same drive for relative references. Saved validation reports dependency files
+under `.references/<id>/…`, with `content.references` mapping these IDs to projects.

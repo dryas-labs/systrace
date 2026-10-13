@@ -14,6 +14,11 @@ import {
 import {
   ProjectSession,
   readSnapshot,
+  readProjectSnapshot,
+  readProjectDefinition,
+  writeProjectDefinition,
+  resolveProjectGraph,
+  PROJECT_FILE,
   publicError,
   DEFAULT_LANGUAGE_ENGINE_PROVIDER,
   assertLanguageEngineProvider,
@@ -25,6 +30,7 @@ import {
 import { RefreshQueue, type RefreshReason } from "./refresh.js";
 import { StdlibDocuments } from "./stdlib.js";
 import { NamespaceDrafts } from "./namespace-drafts.js";
+import { ReferenceDocuments } from "./reference-documents.js";
 import {
   checkExecutableSetting,
   sameConfig,
@@ -38,6 +44,7 @@ import {
 interface RunningProject {
   client: LanguageClient;
   drafts: NamespaceDrafts;
+  references?: ReferenceDocuments;
   session: ProjectSession;
   watchers: vscode.FileSystemWatcher[];
   config: ProjectConfig;
@@ -86,9 +93,11 @@ export class Manager {
   private readonly projects = new Map<string, RunningProject>();
   private readonly libraries = new Map<string, StdlibDocuments>();
   private readonly attempted = new Map<string, ProjectConfig>();
+  private readonly configurationWatchers = new Map<string, vscode.FileSystemWatcher>();
   private readonly statuses = new Map<string, ServiceStatus>();
   private readonly recoveries = new Map<string, number>();
   private readonly pendingRecovery = new Set<string>();
+  private readonly pendingDependencyReload = new Set<string>();
   private readonly output = vscode.window.createOutputChannel("DRYAS", { log: true });
   private readonly statusBar = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -137,6 +146,15 @@ export class Manager {
           }
         },
         refreshLibraries: () => this.libraries.forEach((library) => library.clearCatalog()),
+        referenceUri: (folder, uri) => {
+          const references = this.runningProject(folder).references;
+          if (!references)
+            throw new AdapterError(
+              "QUERY_UNAVAILABLE",
+              "Project references are not connected. Refresh after the language service connects.",
+            );
+          return references.fromSource(uri);
+        },
       },
       async (folder, name) => {
         const running = this.runningProject(folder);
@@ -156,6 +174,7 @@ export class Manager {
           );
         return source;
       },
+      () => this.refresh("configuration"),
     );
     this.statusBar.name = "DRYAS language service";
     this.statusBar.command = "dryas.showLanguageServiceStatus";
@@ -322,6 +341,21 @@ export class Manager {
     await vscode.window.showTextDocument(document, { preview: true });
   }
 
+  private watchProjectConfiguration(root: string): void {
+    if (this.configurationWatchers.has(root)) return;
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(root, PROJECT_FILE),
+    );
+    const changed = () => {
+      this.projectUi.refresh();
+      void this.refresh("configuration", 150);
+    };
+    watcher.onDidCreate(changed);
+    watcher.onDidChange(changed);
+    watcher.onDidDelete(changed);
+    this.configurationWatchers.set(root, watcher);
+  }
+
   private async reconcile(reasons: ReadonlySet<RefreshReason>): Promise<void> {
     if (this.disposed || !vscode.workspace.isTrusted) return;
     const folders = (vscode.workspace.workspaceFolders ?? []).filter(
@@ -337,6 +371,7 @@ export class Manager {
       this.attempted.delete(key);
       this.recoveries.delete(key);
       this.pendingRecovery.delete(key);
+      this.pendingDependencyReload.delete(key);
     }
     const canonicalRoots = new Map(
       await Promise.all(
@@ -349,10 +384,39 @@ export class Manager {
         ),
       ),
     );
+    const watched = new Set<string>();
     for (const folder of folders) {
       if (this.disposed) break;
       const key = folder.uri.toString();
-      const config = options(folder, this.provider);
+      const config: ProjectConfig = options(folder, this.provider);
+      try {
+        config.graph = await resolveProjectGraph(
+          config.projectRoot,
+          config.modelRoots,
+          undefined,
+          (root) => {
+            watched.add(root);
+            this.watchProjectConfiguration(root);
+          },
+        );
+        config.modelRoots = config.graph.projects[0]!.definition.modelRoots;
+      } catch (error) {
+        await this.stopProject(key, "project-references");
+        this.attempted.delete(key);
+        const details = publicError(error);
+        this.setStatus(key, {
+          project: folder.index + 1,
+          name: folder.name,
+          generation: this.statuses.get(key)?.generation ?? 0,
+          reason: "configuration",
+          index: "unconfirmed",
+          connection: "error",
+          stage: "project-references",
+          errorCode: details.code,
+          message: details.message,
+        });
+        continue;
+      }
       if (
         folders.some(
           (other) =>
@@ -379,7 +443,8 @@ export class Manager {
       const previous = this.attempted.get(key);
       const changed = !previous || !sameConfig(previous, config);
       const recovering = this.pendingRecovery.delete(key);
-      const force = reasons.has("manual-restart") || recovering;
+      const dependencyReload = this.pendingDependencyReload.delete(key);
+      const force = reasons.has("manual-restart") || recovering || dependencyReload;
       const current = this.projects.get(key);
       if (current && !current.failed && !force && sameLanguageConfig(current.config, config)) {
         if (!sameConfig(current.config, config) && changed) {
@@ -439,6 +504,11 @@ export class Manager {
       this.attempted.set(key, config);
       await this.startProject(folder, config, reason);
     }
+    for (const [root, watcher] of this.configurationWatchers)
+      if (!watched.has(root)) {
+        watcher.dispose();
+        this.configurationWatchers.delete(root);
+      }
     this.projectUi.refresh();
   }
 
@@ -470,12 +540,13 @@ export class Manager {
     let session: ProjectSession | undefined;
     let client: LanguageClient | undefined;
     const drafts = new NamespaceDrafts();
+    let references: ReferenceDocuments | undefined;
     const watchers: vscode.FileSystemWatcher[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       checkExecutableSetting(config.lspPath, "dryas.lspPath");
       stage = "model-folders";
-      const snapshot = await readSnapshot(
+      const snapshot = await readProjectSnapshot(
         config.projectRoot,
         config.modelRoots ?? ["."],
         undefined,
@@ -491,15 +562,44 @@ export class Manager {
       await verifyLanguageServer(config, this.provider.languageService);
       if (this.disposed) return;
       const library = await this.libraryFor(key);
+      const graph =
+        config.graph ?? (await resolveProjectGraph(config.projectRoot, config.modelRoots));
+      if (graph.key !== snapshot.scopeKey)
+        throw new AdapterError(
+          "PROJECT_CHANGED",
+          "Project references changed while opening the language service. Refresh the project.",
+        );
+      if (graph.projects.length > 1) references = new ReferenceDocuments(graph);
+      const referenceDocuments = references;
       stage = "configuration";
       session = new ProjectSession(config, createLanguageBackend(this.provider, config.engine));
       stage = "lsp-initialize";
-      for (const root of snapshot.roots)
-        watchers.push(
-          vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(root, "**/*.{sysml,kerml}"),
-          ),
+      for (const root of snapshot.roots) {
+        const watcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(root, "**/*.{sysml,kerml}"),
         );
+        if (referenceDocuments) watcher.onDidChange((uri) => referenceDocuments.refresh(uri));
+        watcher.onDidCreate((uri) => {
+          referenceDocuments?.refresh(uri);
+          this.projectUi.refresh();
+        });
+        watcher.onDidDelete((uri) => {
+          // An opened dependency can remain in the server's document cache after
+          // deletion. Reload only its consumers, coalescing a burst of deletions.
+          if (
+            referenceDocuments &&
+            referenceDocuments.fromSource(uri).scheme === referenceDocuments.scheme &&
+            record &&
+            !record.stopping &&
+            this.projects.get(key) === record
+          ) {
+            this.pendingDependencyReload.add(key);
+            void this.refresh("dependency-deleted", 150);
+          }
+          this.projectUi.refresh();
+        });
+        watchers.push(watcher);
+      }
       const modelFolder = {
         uri: vscode.Uri.file(snapshot.roots[0]!),
         name: folder.name,
@@ -522,7 +622,14 @@ export class Manager {
           }),
         {
           workspaceFolder: modelFolder,
-          uriConverters: library.uriConverters,
+          uriConverters: {
+            protocol2Code: (value) => {
+              const uri = library.uriConverters.protocol2Code(value);
+              return referenceDocuments?.fromSource(uri) ?? uri;
+            },
+            code2Protocol: (uri) =>
+              library.uriConverters.code2Protocol(referenceDocuments?.toSource(uri) ?? uri),
+          },
           middleware: {
             handleDiagnostics: (uri, diagnostics, next) => {
               if (
@@ -538,7 +645,7 @@ export class Manager {
             },
           },
           documentSelector: [
-            ...snapshot.roots.flatMap((root) =>
+            ...graph.projects[0]!.roots.flatMap((root) =>
               ["sysml", "kerml"].map((language) => ({
                 scheme: "file",
                 language,
@@ -546,6 +653,12 @@ export class Manager {
               })),
             ),
             ...["sysml", "kerml"].map((language) => ({ scheme: library.scheme, language })),
+            ...(referenceDocuments
+              ? ["sysml", "kerml"].map((language) => ({
+                  scheme: referenceDocuments.scheme,
+                  language,
+                }))
+              : []),
           ],
           synchronize: { fileEvents: watchers },
           outputChannel: this.output,
@@ -564,6 +677,7 @@ export class Manager {
       record = {
         client,
         drafts,
+        ...(references ? { references } : {}),
         session,
         watchers,
         config,
@@ -629,6 +743,7 @@ export class Manager {
         // A factory or constructor can fail before a project record exists.
         // Retire every successfully allocated resource in that partial startup.
         drafts.dispose();
+        await references?.close();
         session?.close();
         watchers.forEach((watcher) => watcher.dispose());
         await client?.stop(1000).catch(() => undefined);
@@ -771,9 +886,13 @@ export class Manager {
     try {
       await readSnapshot(folder.uri.fsPath, roots, undefined, true);
       if (!this.projectUi.resolve(folder)) return;
-      await vscode.workspace
-        .getConfiguration("dryas", folder.uri)
-        .update("modelRoots", roots, vscode.ConfigurationTarget.WorkspaceFolder);
+      const definition = await readProjectDefinition(
+        folder.uri.fsPath,
+        options(folder, this.provider).modelRoots,
+      );
+      await writeProjectDefinition(folder.uri.fsPath, { ...definition, modelRoots: roots });
+      this.projectUi.refresh();
+      await this.refresh("configuration");
     } catch (error) {
       void vscode.window.showErrorMessage(publicError(error).message);
     }
@@ -783,6 +902,9 @@ export class Manager {
     const folder = await this.chooseFolder(requested);
     if (!folder) return;
     const config = options(folder, this.provider);
+    config.modelRoots = (
+      await readProjectDefinition(folder.uri.fsPath, config.modelRoots)
+    ).modelRoots;
     const args = [
       join(this.context.extensionPath, "dist", "mcp.cjs"),
       "--project",
@@ -823,6 +945,7 @@ export class Manager {
       this.output.info(`Project ${status.project}: stopping language service (reason: ${reason}).`);
     }
     await running.client.stop(1000).catch(() => undefined);
+    await running.references?.close();
     if (running.child?.exitCode === null && running.child.signalCode === null) running.child.kill();
   }
 
@@ -835,6 +958,8 @@ export class Manager {
     );
     this.libraries.forEach((library) => library.dispose());
     this.libraries.clear();
+    this.configurationWatchers.forEach((watcher) => watcher.dispose());
+    this.configurationWatchers.clear();
   }
 }
 

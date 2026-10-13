@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
 import { lstat, readdir } from "node:fs/promises";
-import { basename, extname, join, relative, sep } from "node:path";
-import { publicError, resolveModelRoots } from "@dryas/engine-adapter";
+import { basename, extname, join, relative, resolve, sep } from "node:path";
+import {
+  publicError,
+  resolveModelRoots,
+  readProjectDefinition,
+  resolveProjectGraph,
+} from "@dryas/engine-adapter";
 
 export interface LibraryNamespace {
   name: string;
@@ -16,9 +21,23 @@ export interface ProjectBrowser {
   ): Promise<(vscode.DocumentSymbol | vscode.SymbolInformation)[]>;
   libraries(folder: vscode.WorkspaceFolder): Promise<LibraryNamespace[]>;
   refreshLibraries(): void;
+  referenceUri?(folder: vscode.WorkspaceFolder, source: vscode.Uri): vscode.Uri;
 }
 export interface ContentNode {
-  nodeType: "source" | "directory" | "file" | "libraries" | "namespace" | "element" | "message";
+  nodeType:
+    | "source"
+    | "directory"
+    | "file"
+    | "libraries"
+    | "namespace"
+    | "element"
+    | "message"
+    | "references"
+    | "reference";
+  readOnly?: boolean;
+  referenceRoot?: string;
+  referencePath?: string;
+  transitive?: boolean;
   id: string;
   label: string;
   folder: vscode.WorkspaceFolder;
@@ -120,10 +139,11 @@ export class ProjectTree implements vscode.Disposable {
     try {
       if (!isContentNode(parent)) {
         const settings = vscode.workspace.getConfiguration("dryas", parent.uri);
-        const roots = await resolveModelRoots(
+        const definition = await readProjectDefinition(
           parent.uri.fsPath,
           settings.get<string[]>("modelRoots", ["."]),
         );
+        const roots = await resolveModelRoots(parent.uri.fsPath, definition.modelRoots);
         const sources = roots.some((source) => relative(parent.uri.fsPath, source) === "")
           ? await this.directoryChildren(parent, parent.uri)
           : roots.map((source) =>
@@ -139,12 +159,78 @@ export class ProjectTree implements vscode.Disposable {
         return [
           ...sources,
           this.remember({
+            nodeType: "references",
+            id: `${parent.uri}/references`,
+            label: "Project References",
+            folder: parent,
+            parent,
+            referenceRoot: parent.uri.fsPath,
+          }),
+          this.remember({
             nodeType: "libraries",
             id: `${parent.uri}/libraries`,
             label: "Standard Library",
             folder: parent,
             parent,
           }),
+        ];
+      }
+      if (parent.nodeType === "references") {
+        const definition = await readProjectDefinition(parent.referenceRoot!);
+        return definition.references.length
+          ? definition.references.map((path) =>
+              this.remember({
+                nodeType: "reference",
+                id: `${parent.id}/${path}`,
+                label: basename(path),
+                folder: parent.folder,
+                parent,
+                referenceRoot: resolve(parent.referenceRoot!, path),
+                referencePath: path,
+                transitive: parent.readOnly ?? false,
+                readOnly: true,
+              }),
+            )
+          : this.message(parent, "No project references. Use Add Project Reference to add one.");
+      }
+      if (parent.nodeType === "reference") {
+        const settings = vscode.workspace.getConfiguration("dryas", parent.folder.uri);
+        const graph = await resolveProjectGraph(
+          parent.folder.uri.fsPath,
+          settings.get<string[]>("modelRoots", ["."]),
+        );
+        const dependency = graph.projects.find(
+          (project) => relative(project.root, parent.referenceRoot!) === "",
+        );
+        if (!dependency) return this.message(parent, "The referenced project is unavailable.");
+        const sources = dependency.roots.some((root) => relative(dependency.root, root) === "")
+          ? await this.directoryChildren(parent, vscode.Uri.file(dependency.root))
+          : dependency.roots.map((source) =>
+              this.remember({
+                nodeType: "source",
+                id: `${parent.id}/source/${source}`,
+                folder: parent.folder,
+                parent,
+                label: relative(dependency.root, source).split(sep).join("/"),
+                uri: vscode.Uri.file(source),
+                readOnly: true,
+              }),
+            );
+        return [
+          ...sources,
+          ...(dependency.definition.references.length
+            ? [
+                this.remember({
+                  nodeType: "references",
+                  id: `${parent.id}/references`,
+                  label: "Project References",
+                  folder: parent.folder,
+                  parent,
+                  referenceRoot: dependency.root,
+                  readOnly: true,
+                }),
+              ]
+            : []),
         ];
       }
       if (parent.nodeType === "element") return parent.children ?? [];
@@ -209,9 +295,13 @@ export class ProjectTree implements vscode.Disposable {
             nodeType: entry.isDirectory() ? "directory" : "file",
             id: `${id}/${entry.name}`,
             label: entry.name,
-            uri: vscode.Uri.file(join(uri.fsPath, entry.name)),
+            uri:
+              isContentNode(parent) && parent.readOnly && !entry.isDirectory()
+                ? this.browser.referenceUri!(folder, vscode.Uri.file(join(uri.fsPath, entry.name)))
+                : vscode.Uri.file(join(uri.fsPath, entry.name)),
             folder,
             parent,
+            ...(isContentNode(parent) && parent.readOnly ? { readOnly: true } : {}),
           }),
         )
       : this.message(parent, "No model sources in this folder.");
@@ -230,6 +320,7 @@ export class ProjectTree implements vscode.Disposable {
         folder: parent.folder,
         parent,
         kind: symbol.kind,
+        ...(parent.readOnly ? { readOnly: true } : {}),
         uri: hierarchical ? parent.uri! : symbol.location.uri,
         range: hierarchical ? symbol.selectionRange : symbol.location.range,
         detail: hierarchical ? symbol.detail : symbol.containerName,
@@ -253,6 +344,13 @@ export class ProjectTree implements vscode.Disposable {
       extname(node.uri.fsPath).toLowerCase() === ".sysml"
         ? "systraceNamespaceFile"
         : `systrace${node.nodeType}`;
+    if (node.readOnly)
+      item.contextValue =
+        node.nodeType === "reference"
+          ? node.transitive
+            ? "systraceTransitiveReference"
+            : "systraceProjectReference"
+          : "systraceReadOnlyReference";
     const icons: Record<ContentNode["nodeType"], string> = {
       source: "root-folder",
       directory: "folder",
@@ -261,9 +359,14 @@ export class ProjectTree implements vscode.Disposable {
       namespace: "package",
       element: "symbol-field",
       message: "info",
+      references: "references",
+      reference: "project",
     };
     item.iconPath = new vscode.ThemeIcon(icons[node.nodeType]);
-    if (node.nodeType === "libraries") {
+    if (node.nodeType === "reference") {
+      item.description = "Read-only";
+      item.tooltip = `${node.referencePath}\nUses the referenced project's saved model sources.`;
+    } else if (node.nodeType === "libraries") {
       item.description = "Read-only";
       item.tooltip =
         "Library namespaces exposed in this project's language-engine context. Declarations only; imported members are not expanded.";
@@ -281,7 +384,7 @@ export class ProjectTree implements vscode.Disposable {
       item.tooltip =
         node.uri.scheme === "file"
           ? node.uri.fsPath
-          : `${node.label} — bundled library (read-only)`;
+          : `${node.label} — ${node.readOnly ? "referenced project" : "bundled library"} (read-only)`;
     }
     if (["file", "namespace", "element"].includes(node.nodeType) && node.uri) {
       const selection = node.range

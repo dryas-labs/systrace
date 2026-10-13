@@ -14,6 +14,7 @@ const jobs = [
   ["packages/extension/src/extension.ts", "packages/extension/dist/extension.cjs", "cjs"],
   ["test/host/index.ts", "test/host/dist/index.cjs", "cjs"],
   ["test/host/projects.ts", "test/host/dist/projects.cjs", "cjs"],
+  ["test/host/references.ts", "test/host/dist/references.cjs", "cjs"],
 ];
 const common = {
   absWorkingDir: root,
@@ -71,7 +72,7 @@ await copyFile(
 await copyFile(join(root, "LICENSE"), join(root, "packages/extension/LICENSE"));
 
 const packages = new Set();
-for (const result of results.slice(0, -1))
+for (const result of results.filter((_result, index) => jobs[index][0].startsWith("packages/")))
   for (const input of Object.keys(result.metafile.inputs)) {
     const parts = input.split("/");
     const offset = parts.lastIndexOf("node_modules");
