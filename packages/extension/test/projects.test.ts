@@ -19,11 +19,20 @@ const host = vi.hoisted(() => {
     opened: [] as string[],
     picks: [] as string[],
     errors: [] as string[],
+    prepare: vi.fn(async (_folder: unknown, name: string) => {
+      const sources: Record<string, string> = {
+        Electrical: "package Electrical {\n\n}\n",
+        "Power system": "package 'Power system' {\n\n}\n",
+        FromToolbar: "package FromToolbar {\n\n}\n",
+      };
+      return sources[name]!;
+    }),
   };
 });
 vi.mock("vscode", () => ({
   Uri: { file: host.uri },
   Range: class {},
+  ProgressLocation: { Window: 10 },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1 },
   RelativePattern: class {},
   TreeItem: class {
@@ -38,6 +47,7 @@ vi.mock("vscode", () => ({
   window: {
     createTreeView: () => ({ dispose() {} }),
     showInputBox: async () => host.names.shift(),
+    withProgress: async (_options: unknown, run: () => Promise<unknown>) => run(),
     showOpenDialog: async () => host.dialogs.shift(),
     showQuickPick: async (items: { label: string; directory: string }[]) => {
       const choice = host.picks.shift();
@@ -87,6 +97,7 @@ vi.mock("vscode", () => ({
 }));
 
 import { Projects, validProjectName } from "../src/projects.js";
+import { AdapterError } from "@dryas/engine-adapter";
 import { ProjectTree, type ContentNode } from "../src/project-tree.js";
 let root: string;
 let projects: Projects;
@@ -98,6 +109,7 @@ beforeEach(async () => {
   host.opened.length = 0;
   host.picks.length = 0;
   host.errors.length = 0;
+  host.prepare.mockClear();
   host.state.clear();
   root = await mkdtemp(join(tmpdir(), "systrace-project-ui-"));
   projects = new Projects(
@@ -111,6 +123,8 @@ beforeEach(async () => {
     } as unknown as ExtensionContext,
     () => undefined,
     () => {},
+    undefined,
+    host.prepare,
   );
 });
 afterEach(async () => {
@@ -215,9 +229,10 @@ it("creates a namespace in the clicked project's source folder without switching
   host.names.push("Electrical");
   await host.commands.get("dryas.newNamespaceInFolder")!(target);
   const file = join(a, "design", "Electrical.sysml");
-  expect(await readFile(file, "utf8")).toBe("package 'Electrical' {\n\n}\n");
+  expect(await readFile(file, "utf8")).toBe("package Electrical {\n\n}\n");
   expect(host.opened).toEqual([file]);
   expect(host.errors).toEqual([]);
+  expect(host.prepare).toHaveBeenCalledWith(folder, "Electrical");
   expect(projects.current?.uri.fsPath).toBe(b);
   await writeFile(file, "package Electrical { part def Battery; }");
   host.names.push("Electrical");
@@ -265,7 +280,15 @@ it("uses the current project when New Namespace is invoked from the title bar", 
   host.names.push("FromToolbar");
   const focused = { nodeType: "namespace", uri: { scheme: "library" }, label: "SI" };
   await host.commands.get("dryas.newNamespace")!(focused, [focused]);
-  expect(await readFile(join(root, "FromToolbar.sysml"), "utf8")).toContain(
-    "package 'FromToolbar'",
-  );
+  expect(await readFile(join(root, "FromToolbar.sysml"), "utf8")).toContain("package FromToolbar");
+});
+
+it("does not create a file when the language service cannot finish namespace checking", async () => {
+  await projects.open(host.uri(root) as unknown as import("vscode").Uri);
+  host.names.push("Unconfirmed");
+  host.prepare.mockRejectedValueOnce(new AdapterError("TIMEOUT", "Namespace checking timed out."));
+  await projects.newNamespace();
+  await expect(access(join(root, "Unconfirmed.sysml"))).rejects.toMatchObject({ code: "ENOENT" });
+  expect(host.opened).toEqual([]);
+  expect(host.errors).toEqual(["Namespace checking timed out."]);
 });

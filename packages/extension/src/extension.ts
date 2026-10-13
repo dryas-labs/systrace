@@ -24,6 +24,7 @@ import {
 } from "@dryas/engine-adapter";
 import { RefreshQueue, type RefreshReason } from "./refresh.js";
 import { StdlibDocuments } from "./stdlib.js";
+import { NamespaceDrafts } from "./namespace-drafts.js";
 import {
   checkExecutableSetting,
   sameConfig,
@@ -36,6 +37,7 @@ import {
 
 interface RunningProject {
   client: LanguageClient;
+  drafts: NamespaceDrafts;
   session: ProjectSession;
   watchers: vscode.FileSystemWatcher[];
   config: ProjectConfig;
@@ -135,6 +137,24 @@ export class Manager {
           }
         },
         refreshLibraries: () => this.libraries.forEach((library) => library.clearCatalog()),
+      },
+      async (folder, name) => {
+        const running = this.runningProject(folder);
+        const source = await running.drafts.prepare(
+          running.client,
+          name,
+          () =>
+            vscode.Uri.file(
+              join(context.globalStorageUri.fsPath, `namespace-check-${randomUUID()}.sysml`),
+            ).toString(),
+          running.config.engine.timeoutMs ?? 30000,
+        );
+        if (this.runningProject(folder) !== running)
+          throw new AdapterError(
+            "PROJECT_CHANGED",
+            "The language service changed while checking this name. Create the namespace again.",
+          );
+        return source;
       },
     );
     this.statusBar.name = "DRYAS language service";
@@ -449,6 +469,7 @@ export class Manager {
     let record: RunningProject | undefined;
     let session: ProjectSession | undefined;
     let client: LanguageClient | undefined;
+    const drafts = new NamespaceDrafts();
     const watchers: vscode.FileSystemWatcher[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -504,6 +525,15 @@ export class Manager {
           uriConverters: library.uriConverters,
           middleware: {
             handleDiagnostics: (uri, diagnostics, next) => {
+              if (
+                drafts.acceptDiagnostics(
+                  uri.toString(),
+                  diagnostics.some(
+                    (diagnostic) => diagnostic.severity === vscode.DiagnosticSeverity.Error,
+                  ),
+                )
+              )
+                return;
               if (!library.isInternalUri(uri)) next(uri, diagnostics);
             },
           },
@@ -533,6 +563,7 @@ export class Manager {
       );
       record = {
         client,
+        drafts,
         session,
         watchers,
         config,
@@ -597,6 +628,7 @@ export class Manager {
       } else {
         // A factory or constructor can fail before a project record exists.
         // Retire every successfully allocated resource in that partial startup.
+        drafts.dispose();
         session?.close();
         watchers.forEach((watcher) => watcher.dispose());
         await client?.stop(1000).catch(() => undefined);
@@ -635,6 +667,7 @@ export class Manager {
   ): void {
     if (this.disposed || record.stopping || record.failed || this.projects.get(key) !== record)
       return;
+    record.drafts.dispose();
     record.failed = new AdapterError(
       code,
       code === "ENGINE_PROTOCOL_ERROR"
@@ -775,6 +808,7 @@ export class Manager {
     if (!running) return;
     this.projects.delete(key);
     running.stopping = true;
+    running.drafts.dispose();
     running.session.close();
     running.watchers.forEach((watcher) => watcher.dispose());
     const status = this.statuses.get(key);

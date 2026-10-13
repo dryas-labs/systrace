@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
-import { namespaceSource, type Projects } from "../../packages/extension/src/projects.js";
+import type { Projects } from "../../packages/extension/src/projects.js";
 import type { ContentNode } from "../../packages/extension/src/project-tree.js";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -209,14 +209,6 @@ export async function run(): Promise<void> {
     vscode.Uri.joinPath(third, ".vscode/settings.json"),
     Buffer.from(JSON.stringify({ "dryas.modelRoots": ["architecture", "requirements"] })),
   );
-  await vscode.workspace.fs.writeFile(
-    vscode.Uri.joinPath(third, "requirements/Electrical.sysml"),
-    Buffer.from(namespaceSource("Electrical")),
-  );
-  await vscode.workspace.fs.writeFile(
-    vscode.Uri.joinPath(third, "architecture/part.sysml"),
-    Buffer.from(namespaceSource("part")),
-  );
   await vscode.commands.executeCommand("dryas.openProject", third);
   await eventually(
     async () => state.getLanguageServiceStatus(),
@@ -226,15 +218,29 @@ export async function run(): Promise<void> {
     (folder) => folder.uri.toString() === third.toString(),
   );
   assert(c);
+  const cases = [
+    ["requirements", "Hello", "Hello"],
+    ["architecture", "part", "'part'"],
+    ["requirements", "Power System", "'Power System'"],
+    ["requirements", "系统", "'系统'"],
+  ];
+  for (const [directory, name, spelling] of cases) {
+    const source = await tree.prepareNamespace(c, name!);
+    assert.equal(source, `package ${spelling} {\n\n}\n`);
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.joinPath(third, directory!, `${name}.sysml`),
+      Buffer.from(source),
+    );
+  }
+  // The current native outline reports an escaped label for an embedded apostrophe.
+  // Do not silently interpret that label as the requested model name.
+  await assert.rejects(() => tree.prepareNamespace(c, "O'Brien"), { code: "QUERY_UNAVAILABLE" });
   const sourceFolders = await children(c);
   assert.deepEqual(
     sourceFolders.map((node) => node.label),
     ["architecture", "requirements", "Standard Library"],
   );
-  for (const [directory, name] of [
-    ["architecture", "part"],
-    ["requirements", "Electrical"],
-  ]) {
+  for (const [directory, name] of cases) {
     const folder = sourceFolders.find((node) => node.label === directory)!;
     const file = (await children(folder)).find((node) => node.label === `${name}.sysml`)!;
     assert(file);
@@ -243,6 +249,15 @@ export async function run(): Promise<void> {
       (nodes) => nodes.some((node) => node.label === name),
     );
   }
+  const scratchSymbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+    "vscode.executeWorkspaceSymbolProvider",
+    "__systrace_namespace_",
+  );
+  assert(!scratchSymbols?.length, "Namespace check buffers must be closed after use");
+  assert(
+    !vscode.languages.getDiagnostics().some(([uri]) => uri.path.includes("/namespace-check-")),
+    "Temporary candidate diagnostics must stay out of Problems",
+  );
   await vscode.commands.executeCommand("dryas.validateProject", c);
   assert.equal(
     JSON.parse(vscode.window.activeTextEditor!.document.getText()).project.errors,
@@ -256,6 +271,6 @@ export async function run(): Promise<void> {
   );
   await vscode.workspace.fs.stat(third);
   console.log(
-    "DRYAS host checks passed: flat project sources, named source folders, native namespace templates, dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
+    "DRYAS host checks passed: flat project sources, named source folders, LSP-checked namespace spellings, dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
   );
 }

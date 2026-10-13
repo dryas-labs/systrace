@@ -5,7 +5,7 @@
 SysML v2 editing for VS Code and Cursor, powered by an external language engine.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.10 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
+Version 0.1.11 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
@@ -143,7 +143,15 @@ Browsing another project or a library does not rebind an existing agent conversa
 Right-click a project or source folder and choose **New Namespace…**, or use the
 same action in the Projects title bar. Enter a name to create and open a matching
 `.sysml` file containing a named `package`. With multiple source folders, a project-level
-action asks which one to use. Names are quoted in the generated SysML, supporting
-spaces and keywords. Existing files are never overwritten. The filename and package
+action asks which one to use. The project's LSP checks an unquoted declaration first,
+then a quoted declaration if necessary. Creation requires diagnostics without errors
+and the exact expected package name in the returned outline. No local keyword list or
+identifier regular expression decides the spelling. Temporary buffers are closed after
+checking; unavailable, failed or timed-out checks do not create a file.
+Existing files are never overwritten. The filename and package
 name can subsequently be changed independently. Creating from another project's
 context menu does not change the current project or existing MCP bindings.
+
+Names containing an apostrophe currently cannot pass this creation check when the
+language service returns an escaped label instead of the requested name. The action
+reports that it could not confirm the name and leaves the project files unchanged.

@@ -6,7 +6,7 @@ import {
   type ProjectBrowser,
   type ProjectNode,
 } from "./project-tree.js";
-import { resolveModelRoots, publicError } from "@dryas/engine-adapter";
+import { resolveModelRoots, publicError, AdapterError } from "@dryas/engine-adapter";
 import { mkdir, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 
@@ -28,12 +28,7 @@ export function validProjectName(value: string): string | undefined {
   return undefined;
 }
 
-/** Quoted names support spaces and keywords without adding a SysML lexer to the editor. */
-export function namespaceSource(name: string): string {
-  return `package '${name.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}' {\n\n}\n`;
-}
-
-function validNamespaceName(name: string): string | undefined {
+function validNamespaceFileName(name: string): string | undefined {
   return (
     validProjectName(name) ??
     (name.startsWith(".") ? "Use a namespace name that does not start with a dot." : undefined)
@@ -61,6 +56,10 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
     private readonly status: (folder: vscode.WorkspaceFolder) => ProjectStatus | undefined,
     private readonly selectionChanged: () => void,
     browser?: ProjectBrowser,
+    private readonly namespacePreparation?: (
+      folder: vscode.WorkspaceFolder,
+      name: string,
+    ) => Promise<string>,
   ) {
     this.selected = context.workspaceState.get<string>("dryas.currentProject");
     if (browser) {
@@ -258,6 +257,15 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
     }
   }
 
+  async prepareNamespace(folder: vscode.WorkspaceFolder, name: string): Promise<string> {
+    if (!this.resolve(folder) || !this.namespacePreparation)
+      throw new AdapterError(
+        "ENGINE_UNAVAILABLE",
+        "Connect the project's language service before creating a namespace.",
+      );
+    return this.namespacePreparation(folder, name);
+  }
+
   async newNamespace(requested?: ProjectNode): Promise<void> {
     const node = requested && isContentNode(requested) ? requested : undefined;
     if (node && !["source", "directory"].includes(node.nodeType)) return;
@@ -307,11 +315,16 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
       const name = await vscode.window.showInputBox({
         title: "New Namespace",
         prompt: "Namespace name; a matching .sysml file will be created",
-        validateInput: validNamespaceName,
+        validateInput: validNamespaceFileName,
       });
-      if (!name || validNamespaceName(name) || !this.resolve(folder)) return;
+      if (!name || validNamespaceFileName(name) || !this.resolve(folder)) return;
+      const source = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Window, title: "Checking namespace name" },
+        () => this.prepareNamespace(folder, name),
+      );
+      if (!this.resolve(folder)) return;
       const uri = vscode.Uri.file(join(directory, `${name}.sysml`));
-      await writeFile(uri.fsPath, namespaceSource(name), { encoding: "utf8", flag: "wx" });
+      await writeFile(uri.fsPath, source, { encoding: "utf8", flag: "wx" });
       this.contents?.refresh();
       this.refresh();
       await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), {
