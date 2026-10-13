@@ -19,6 +19,8 @@ const host = vi.hoisted(() => {
     opened: [] as string[],
     picks: [] as string[],
     errors: [] as string[],
+    information: [] as string[],
+    pickerItems: [] as string[][],
     confirmations: [] as (string | undefined)[],
     deleted: [] as string[],
     textDocuments: [] as { uri: ReturnType<typeof uri>; isDirty: boolean }[],
@@ -76,10 +78,11 @@ vi.mock("vscode", () => ({
     withProgress: async (_options: unknown, run: () => Promise<unknown>) => run(),
     showOpenDialog: async () => host.dialogs.shift(),
     showQuickPick: async (items: { label: string; directory: string }[]) => {
+      host.pickerItems.push(items.map((item) => item.label));
       const choice = host.picks.shift();
       return items.find((item) => item.label === choice);
     },
-    showInformationMessage: (message: string) => host.errors.push(message),
+    showInformationMessage: (message: string) => host.information.push(message),
     showTextDocument: async (document: { uri: ReturnType<typeof host.uri> }) => {
       host.opened.push(document.uri.fsPath);
     },
@@ -157,6 +160,8 @@ beforeEach(async () => {
   host.opened.length = 0;
   host.picks.length = 0;
   host.errors.length = 0;
+  host.information.length = 0;
+  host.pickerItems.length = 0;
   host.confirmations.length = 0;
   host.deleted.length = 0;
   host.textDocuments.length = 0;
@@ -519,4 +524,37 @@ it("rejects selecting the consuming folder as its own reference before writing c
   await expect(access(join(root, ".systrace/project.json"))).rejects.toMatchObject({
     code: "ENOENT",
   });
+});
+
+it("hides existing references, reports a duplicate folder without rewriting configuration, and offers it again after removal", async () => {
+  const a = join(root, "A"),
+    b = join(root, "B"),
+    c = join(root, "C");
+  for (const folder of [a, b, c]) await mkdir(folder);
+  await projects.open(host.uri(a) as unknown as import("vscode").Uri);
+  const consumer = projects.current!;
+  for (const folder of [b, c])
+    await projects.open(host.uri(folder) as unknown as import("vscode").Uri);
+  await writeProjectDefinition(a, { version: 1, modelRoots: ["."], references: ["../B/."] });
+  const before = await readFile(join(a, ".systrace/project.json"), "utf8");
+  await projects.addReference(consumer);
+  expect(host.pickerItems.at(-1)).toEqual(["C", "Browse for Project Folder…"]);
+  host.picks.push("Browse for Project Folder…");
+  host.dialogs.push([host.uri(b)]);
+  await projects.addReference(consumer);
+  expect(host.information).toEqual(["B is already referenced by A."]);
+  expect(host.errors).toEqual([]);
+  expect(await readFile(join(a, ".systrace/project.json"), "utf8")).toBe(before);
+  await expect(access(join(b, ".systrace"))).rejects.toMatchObject({ code: "ENOENT" });
+  await projects.removeReference({
+    nodeType: "reference",
+    id: "B",
+    label: "B",
+    folder: consumer,
+    parent: consumer,
+    referencePath: "../B/.",
+  });
+  await projects.addReference(consumer);
+  expect(host.pickerItems.at(-1)).toEqual(["B", "C", "Browse for Project Folder…"]);
+  expect(projects.current?.uri.fsPath).toBe(c);
 });

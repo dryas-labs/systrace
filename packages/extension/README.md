@@ -5,7 +5,7 @@
 SysML v2 editing for VS Code and Cursor, powered by an external language engine.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.14 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
+Version 0.1.15 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
@@ -159,7 +159,8 @@ elements, folders, KerML files and read-only library nodes.
 Right-click the consuming project and choose **Add Project Reference…**. Select an open
 project or **Browse for Project Folder…** to choose an external project folder. With no
 other project open, the folder dialog appears directly. External references do not add
-workspace folders or change the current project. **Project References**
+workspace folders or change the current project. Projects already directly referenced are
+hidden from the picker; selecting the same folder through Browse reports an existing reference. **Project References**
 shows direct and transitive references. Referenced files open read-only in the consumer's
 language context; **Open Referenced Project** opens the owning project for editing.
 **Remove Project Reference** removes the relationship, not the referenced files. A dependency

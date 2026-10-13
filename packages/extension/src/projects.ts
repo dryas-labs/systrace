@@ -16,7 +16,7 @@ import {
   referencePath,
 } from "@dryas/engine-adapter";
 import { lstat, mkdir, realpath, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export interface ProjectStatus {
   connection: string;
@@ -287,6 +287,15 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
     );
   }
 
+  private async referencedRoots(root: string, references: string[]): Promise<string[]> {
+    return Promise.all(
+      references.map((path) => {
+        const target = resolve(root, path);
+        return realpath(target).catch(() => target);
+      }),
+    );
+  }
+
   async addReference(
     requested?: ProjectNode,
     target?: vscode.WorkspaceFolder | vscode.Uri,
@@ -296,44 +305,60 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
       requested && isContentNode(requested) ? requested.folder : requested,
     );
     if (!folder) return;
-    if (!target) {
-      const candidates = this.folders.filter(
-        (other) => other.uri.toString() !== folder.uri.toString(),
-      );
-      if (candidates.length) {
-        const items: (vscode.QuickPickItem & { project?: vscode.WorkspaceFolder })[] = [
-          ...candidates.map((project) => ({
-            label: project.name,
-            description: project.uri.fsPath,
-            project,
-          })),
-          {
-            label: "Browse for Project Folder…",
-            description: "Reference a project outside this workspace",
-          },
-        ];
-        const selected = await vscode.window.showQuickPick(items, {
-          placeHolder: `Reference a project from ${folder.name}`,
-        });
-        if (!selected) return;
-        target = selected.project;
-      }
-      if (!target) {
-        target = (
-          await vscode.window.showOpenDialog({
-            title: `Reference a project from ${folder.name}`,
-            canSelectFiles: false,
-            canSelectFolders: true,
-            canSelectMany: false,
-            openLabel: "Add Project Reference",
-          })
-        )?.[0];
-      }
-    }
-    if (!target) return;
-    const uri = "uri" in target ? target.uri : target;
-    if (uri.scheme !== "file") return;
     try {
+      if (!target) {
+        const base = await realpath(folder.uri.fsPath);
+        const existing = await this.referencedRoots(
+          base,
+          (await this.definition(folder)).references,
+        );
+        const candidates = (
+          await Promise.all(
+            this.folders.map(async (project) => ({
+              project,
+              root: await realpath(project.uri.fsPath).catch(() => project.uri.fsPath),
+            })),
+          )
+        )
+          .filter(
+            (entry) =>
+              relative(base, entry.root) !== "" &&
+              !existing.some((root) => relative(root, entry.root) === ""),
+          )
+          .map((entry) => entry.project);
+        if (candidates.length) {
+          const items: (vscode.QuickPickItem & { project?: vscode.WorkspaceFolder })[] = [
+            ...candidates.map((project) => ({
+              label: project.name,
+              description: project.uri.fsPath,
+              project,
+            })),
+            {
+              label: "Browse for Project Folder…",
+              description: "Reference a project outside this workspace",
+            },
+          ];
+          const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: `Reference a project from ${folder.name}`,
+          });
+          if (!selected) return;
+          target = selected.project;
+        }
+        if (!target) {
+          target = (
+            await vscode.window.showOpenDialog({
+              title: `Reference a project from ${folder.name}`,
+              canSelectFiles: false,
+              canSelectFolders: true,
+              canSelectMany: false,
+              openLabel: "Add Project Reference",
+            })
+          )?.[0];
+        }
+      }
+      if (!target) return;
+      const uri = "uri" in target ? target.uri : target;
+      if (uri.scheme !== "file") return;
       const [base, dependency] = await Promise.all([
         realpath(folder.uri.fsPath),
         realpath(uri.fsPath),
@@ -343,10 +368,17 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
       const opened = this.folders.find(
         (project) => relative(project.uri.fsPath, dependency) === "",
       );
-      const [definition, targetDefinition] = await Promise.all([
-        this.definition(folder),
-        opened ? this.definition(opened) : readProjectDefinition(dependency),
-      ]);
+      const definition = await this.definition(folder);
+      const existing = await this.referencedRoots(base, definition.references);
+      if (existing.some((root) => relative(root, dependency) === "")) {
+        void vscode.window.showInformationMessage(
+          `${basename(dependency)} is already referenced by ${folder.name}.`,
+        );
+        return;
+      }
+      const targetDefinition = opened
+        ? await this.definition(opened)
+        : await readProjectDefinition(dependency);
       const path = referencePath(base, dependency);
       const next = { ...definition, references: [...new Set([...definition.references, path])] };
       await resolveProjectGraph(

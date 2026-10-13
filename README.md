@@ -38,7 +38,7 @@ See [Language engine](docs/language-engine.md) for the current selection.
 source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
 it does not bundle the engine or its standard library.
 
-Version 0.1.14 uses `v0.9.2-dryas.5`. Selected completion details show the native
+Version 0.1.15 uses `v0.9.2-dryas.5`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
 complete `doc`. Update the VSIX and both external executables together. If you
 set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.5` too.
@@ -216,7 +216,8 @@ elements, folders, KerML files and read-only library nodes.
 Right-click the consuming project and choose **Add Project Reference…**. Select an open
 project or **Browse for Project Folder…** to choose an external project folder. With no
 other project open, the folder dialog appears directly. External references do not add
-workspace folders or change the current project. **Project References**
+workspace folders or change the current project. Projects already directly referenced are
+hidden from the picker; selecting the same folder through Browse reports an existing reference. **Project References**
 shows direct and transitive references. Referenced files open read-only in the consumer's
 language context; **Open Referenced Project** opens the owning project for editing.
 **Remove Project Reference** removes the relationship, not the referenced files. A dependency
