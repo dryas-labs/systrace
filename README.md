@@ -38,7 +38,7 @@ See [Language engine](docs/language-engine.md) for the current selection.
 source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
 it does not bundle the engine or its standard library.
 
-Version 0.1.8 uses `v0.9.2-dryas.5`. Selected completion details show the native
+Version 0.1.9 uses `v0.9.2-dryas.5`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
 complete `doc`. Update the VSIX and both external executables together. If you
 set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.5` too.
@@ -173,8 +173,10 @@ to run the same check in the configured Cursor installation.
 ## Project tree
 
 Click **Systrace** in the Activity Bar to open its dedicated sidebar, separate from
-Explorer. Expand a project to browse configured **Sources** and the read-only
-**Standard Library**. Source folders contain `.sysml` / `.kerml` files; expand a
+Explorer. With the default source scope, model files and subfolders appear directly
+under the project name. Separately configured source folders use their actual
+project-relative names. The read-only **Standard Library** is a separate node.
+Source folders contain `.sysml` / `.kerml` files; expand a
 file for the declaration hierarchy returned by the language engine. Click an
 element to navigate to its source. Unsaved edits refresh the outline; file creation
 and deletion refresh the folders. A refresh action is also available in the title bar.
@@ -184,3 +186,11 @@ current project context. Expand them for declared members and read-only source.
 Name shadowing can affect the visible catalogue; imports and re-exports are not
 expanded as duplicate declarations. Type labels use only engine-supplied information.
 Browsing another project or a library does not rebind an existing agent conversation.
+
+Right-click a project or source folder and choose **New Namespace…**, or use the
+same action in the Projects title bar. Enter a name to create and open a matching
+`.sysml` file containing a named `package`. With multiple source folders, a project-level
+action asks which one to use. Names are quoted in the generated SysML, supporting
+spaces and keywords. Existing files are never overwritten. The filename and package
+name can subsequently be changed independently. Creating from another project's
+context menu does not change the current project or existing MCP bindings.

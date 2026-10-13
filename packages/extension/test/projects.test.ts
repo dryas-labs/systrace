@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { access, mkdtemp, mkdir, rm } from "node:fs/promises";
+import { access, mkdtemp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { ExtensionContext, WorkspaceFolder } from "vscode";
@@ -15,12 +15,17 @@ const host = vi.hoisted(() => {
     changes: new Set<() => void>(),
     dialogs: [] as ReturnType<typeof uri>[][],
     names: [] as string[],
+    roots: new Map<string, string[]>(),
+    opened: [] as string[],
+    picks: [] as string[],
     errors: [] as string[],
   };
 });
 vi.mock("vscode", () => ({
   Uri: { file: host.uri },
-  TreeItemCollapsibleState: { None: 0 },
+  Range: class {},
+  TreeItemCollapsibleState: { None: 0, Collapsed: 1 },
+  RelativePattern: class {},
   TreeItem: class {
     constructor(public label: string) {}
   },
@@ -34,7 +39,14 @@ vi.mock("vscode", () => ({
     createTreeView: () => ({ dispose() {} }),
     showInputBox: async () => host.names.shift(),
     showOpenDialog: async () => host.dialogs.shift(),
-    showQuickPick: async () => undefined,
+    showQuickPick: async (items: { label: string; directory: string }[]) => {
+      const choice = host.picks.shift();
+      return items.find((item) => item.label === choice);
+    },
+    showInformationMessage: (message: string) => host.errors.push(message),
+    showTextDocument: async (document: { uri: ReturnType<typeof host.uri> }) => {
+      host.opened.push(document.uri.fsPath);
+    },
     showErrorMessage: (message: string) => host.errors.push(message),
   },
   workspace: {
@@ -45,6 +57,18 @@ vi.mock("vscode", () => ({
       host.changes.add(fn);
       return { dispose: () => host.changes.delete(fn) };
     },
+    getConfiguration: (_section: string, uri: ReturnType<typeof host.uri>) => ({
+      get: (_key: string, fallback: string[]) => host.roots.get(uri.fsPath) ?? fallback,
+    }),
+    openTextDocument: async (uri: ReturnType<typeof host.uri>) => ({ uri }),
+    onDidChangeConfiguration: () => ({ dispose() {} }),
+    onDidChangeTextDocument: () => ({ dispose() {} }),
+    createFileSystemWatcher: () => ({
+      onDidCreate() {},
+      onDidDelete() {},
+      onDidChange() {},
+      dispose() {},
+    }),
     updateWorkspaceFolders: (start: number, count: number, ...add: typeof host.folders) => {
       host.folders.splice(start, count, ...add);
       host.folders.forEach((folder, index) => {
@@ -63,12 +87,16 @@ vi.mock("vscode", () => ({
 }));
 
 import { Projects, validProjectName } from "../src/projects.js";
+import { ProjectTree, type ContentNode } from "../src/project-tree.js";
 let root: string;
 let projects: Projects;
 beforeEach(async () => {
   host.folders.length = 0;
   host.dialogs.length = 0;
   host.names.length = 0;
+  host.roots.clear();
+  host.opened.length = 0;
+  host.picks.length = 0;
   host.errors.length = 0;
   host.state.clear();
   root = await mkdtemp(join(tmpdir(), "systrace-project-ui-"));
@@ -138,4 +166,81 @@ it("rejects path traversal and reserved folder names before creating a project",
   for (const name of ["../outside", "folder/name", "..", "CON", "trailing."])
     expect(validProjectName(name)).toBeTruthy();
   expect(validProjectName("Power system")).toBeUndefined();
+});
+
+it("shows root files directly under the project and configured source folders by their actual names", async () => {
+  await mkdir(join(root, "architecture"));
+  await mkdir(join(root, "requirements"));
+  await writeFile(join(root, "system.sysml"), "package System;");
+  await projects.open(host.uri(root) as unknown as import("vscode").Uri);
+  const folder = projects.current!;
+  const tree = new ProjectTree(
+    { symbols: async () => [], libraries: async () => [], refreshLibraries() {} },
+    () => {},
+  );
+  try {
+    const direct = await tree.children(folder);
+    const file = direct.find((node) => node.label === "system.sysml")!;
+    expect(file.parent).toBe(folder);
+    expect(direct.some((node) => node.nodeType === "source")).toBe(false);
+    expect(direct.at(-1)?.nodeType).toBe("libraries");
+    host.roots.set(root, ["architecture", "requirements"]);
+    expect((await tree.children(folder)).map((node) => node.label)).toEqual([
+      "architecture",
+      "requirements",
+      "Standard Library",
+    ]);
+  } finally {
+    tree.dispose();
+  }
+});
+
+it("creates a namespace in the clicked project's source folder without switching the current project or overwriting files", async () => {
+  const a = join(root, "A"),
+    b = join(root, "B");
+  await mkdir(join(a, "design"), { recursive: true });
+  await mkdir(b);
+  await projects.open(host.uri(a) as unknown as import("vscode").Uri);
+  const folder = projects.current!;
+  host.roots.set(a, ["design"]);
+  const target: ContentNode = {
+    nodeType: "directory",
+    id: "design",
+    label: "design",
+    folder,
+    parent: folder,
+    uri: host.uri(join(a, "design")) as unknown as import("vscode").Uri,
+  };
+  await projects.open(host.uri(b) as unknown as import("vscode").Uri);
+  host.names.push("Electrical");
+  await host.commands.get("dryas.newNamespace")!(target);
+  const file = join(a, "design", "Electrical.sysml");
+  expect(await readFile(file, "utf8")).toBe("package 'Electrical' {\n\n}\n");
+  expect(host.opened).toEqual([file]);
+  expect(host.errors).toEqual([]);
+  expect(projects.current?.uri.fsPath).toBe(b);
+  await writeFile(file, "package Electrical { part def Battery; }");
+  host.names.push("Electrical");
+  await projects.newNamespace(target);
+  expect(await readFile(file, "utf8")).toBe("package Electrical { part def Battery; }");
+  expect(host.errors.at(-1)).toContain("already exists");
+});
+
+it("uses the chosen source root for project-level namespace creation and cancels without creating a file", async () => {
+  await mkdir(join(root, "architecture"));
+  await mkdir(join(root, "requirements"));
+  await projects.open(host.uri(root) as unknown as import("vscode").Uri);
+  host.roots.set(root, ["architecture", "requirements"]);
+  host.picks.push("requirements");
+  host.names.push("Power system");
+  await projects.newNamespace();
+  expect(await readFile(join(root, "requirements", "Power system.sysml"), "utf8")).toContain(
+    "package 'Power system'",
+  );
+  await expect(access(join(root, "Power system.sysml"))).rejects.toMatchObject({ code: "ENOENT" });
+  host.names.push("Cancelled");
+  await projects.newNamespace();
+  await expect(access(join(root, "requirements", "Cancelled.sysml"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
 });

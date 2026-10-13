@@ -124,17 +124,20 @@ export class ProjectTree implements vscode.Disposable {
           parent.uri.fsPath,
           settings.get<string[]>("modelRoots", ["."]),
         );
+        const sources = roots.some((source) => relative(parent.uri.fsPath, source) === "")
+          ? await this.directoryChildren(parent, parent.uri)
+          : roots.map((source) =>
+              this.remember({
+                nodeType: "source",
+                id: `${parent.uri}/source/${source}`,
+                folder: parent,
+                parent,
+                label: relative(parent.uri.fsPath, source).split(sep).join("/"),
+                uri: vscode.Uri.file(source),
+              }),
+            );
         return [
-          ...roots.map((root) =>
-            this.remember({
-              nodeType: "source",
-              id: `${parent.uri}/source/${root}`,
-              folder: parent,
-              parent,
-              label: `Sources · ${relative(parent.uri.fsPath, root).split(sep).join("/") || "."}`,
-              uri: vscode.Uri.file(root),
-            }),
-          ),
+          ...sources,
           this.remember({
             nodeType: "libraries",
             id: `${parent.uri}/libraries`,
@@ -178,35 +181,40 @@ export class ProjectTree implements vscode.Disposable {
           ? this.elements(parent, declarations)
           : this.message(parent, "No declared members reported by the language engine.");
       }
-      if ((await lstat(parent.uri!.fsPath)).isSymbolicLink())
-        return this.message(parent, "Symbolic links and junctions are not model source folders.");
-      const entries = (await readdir(parent.uri!.fsPath, { withFileTypes: true }))
-        .filter(
-          (entry) =>
-            !entry.name.startsWith(".") &&
-            entry.name !== "node_modules" &&
-            !entry.isSymbolicLink() &&
-            (entry.isDirectory() || /\.(sysml|kerml)$/i.test(entry.name)),
-        )
-        .sort(
-          (a, b) =>
-            Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name),
-        );
-      return entries.length
-        ? entries.map((entry) =>
-            this.remember({
-              nodeType: entry.isDirectory() ? "directory" : "file",
-              id: `${parent.id}/${entry.name}`,
-              label: entry.name,
-              uri: vscode.Uri.file(join(parent.uri!.fsPath, entry.name)),
-              folder: parent.folder,
-              parent,
-            }),
-          )
-        : this.message(parent, "No model sources in this folder.");
+      return await this.directoryChildren(parent, parent.uri!);
     } catch (error) {
       return this.message(parent, publicError(error).message);
     }
+  }
+
+  private async directoryChildren(parent: ProjectNode, uri: vscode.Uri): Promise<ContentNode[]> {
+    if ((await lstat(uri.fsPath)).isSymbolicLink())
+      return this.message(parent, "Symbolic links and junctions are not model source folders.");
+    const folder = isContentNode(parent) ? parent.folder : parent;
+    const id = isContentNode(parent) ? parent.id : folder.uri.toString();
+    const entries = (await readdir(uri.fsPath, { withFileTypes: true }))
+      .filter(
+        (entry) =>
+          !entry.name.startsWith(".") &&
+          entry.name !== "node_modules" &&
+          !entry.isSymbolicLink() &&
+          (entry.isDirectory() || /\.(sysml|kerml)$/i.test(entry.name)),
+      )
+      .sort(
+        (a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name),
+      );
+    return entries.length
+      ? entries.map((entry) =>
+          this.remember({
+            nodeType: entry.isDirectory() ? "directory" : "file",
+            id: `${id}/${entry.name}`,
+            label: entry.name,
+            uri: vscode.Uri.file(join(uri.fsPath, entry.name)),
+            folder,
+            parent,
+          }),
+        )
+      : this.message(parent, "No model sources in this folder.");
   }
 
   private elements(

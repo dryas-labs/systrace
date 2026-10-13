@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
-import type { Projects } from "../../packages/extension/src/projects.js";
+import { namespaceSource, type Projects } from "../../packages/extension/src/projects.js";
 import type { ContentNode } from "../../packages/extension/src/project-tree.js";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -85,16 +85,23 @@ export async function run(): Promise<void> {
   const children = async (
     node: import("../../packages/extension/src/project-tree.js").ProjectNode,
   ) => (await tree.getChildren(node)) as ContentNode[];
-  const groups = await children(a);
-  const sources = groups.find((node) => node.nodeType === "source");
-  const library = groups.find((node) => node.nodeType === "libraries");
-  assert(sources && library);
-  assert.equal(sources.label, "Sources · .");
-  const files = await children(sources);
+  const files = await children(a);
+  const library = files.find((node) => node.nodeType === "libraries");
+  assert(library);
+  assert(
+    !files.some((node) => node.nodeType === "source"),
+    "Default sources must be directly under the project",
+  );
+  assert(
+    manifest.contributes.commands.some(
+      (command: { command: string }) => command.command === "dryas.newNamespace",
+    ),
+  );
   assert(!files.some((node) => node.label === "notes.md"));
   const definitions = files.find((node) => node.label === "definitions.sysml");
   const design = files.find((node) => node.label === "design");
   assert(definitions && design);
+  assert.equal(tree.getParent(definitions), a);
   assert((await children(design)).some((node) => node.label === "system.sysml"));
   const packageNode = (await children(definitions)).find((node) => node.label === "Components");
   assert(packageNode);
@@ -196,7 +203,20 @@ export async function run(): Promise<void> {
   }
 
   const third = vscode.Uri.joinPath(a.uri, "..", "ProjectC");
-  await vscode.workspace.fs.createDirectory(third);
+  for (const directory of ["architecture", "requirements", ".vscode"])
+    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(third, directory));
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(third, ".vscode/settings.json"),
+    Buffer.from(JSON.stringify({ "dryas.modelRoots": ["architecture", "requirements"] })),
+  );
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(third, "requirements/Electrical.sysml"),
+    Buffer.from(namespaceSource("Electrical")),
+  );
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(third, "architecture/part.sysml"),
+    Buffer.from(namespaceSource("part")),
+  );
   await vscode.commands.executeCommand("dryas.openProject", third);
   await eventually(
     async () => state.getLanguageServiceStatus(),
@@ -206,6 +226,29 @@ export async function run(): Promise<void> {
     (folder) => folder.uri.toString() === third.toString(),
   );
   assert(c);
+  const sourceFolders = await children(c);
+  assert.deepEqual(
+    sourceFolders.map((node) => node.label),
+    ["architecture", "requirements", "Standard Library"],
+  );
+  for (const [directory, name] of [
+    ["architecture", "part"],
+    ["requirements", "Electrical"],
+  ]) {
+    const folder = sourceFolders.find((node) => node.label === directory)!;
+    const file = (await children(folder)).find((node) => node.label === `${name}.sysml`)!;
+    assert(file);
+    await eventually(
+      () => children(file),
+      (nodes) => nodes.some((node) => node.label === name),
+    );
+  }
+  await vscode.commands.executeCommand("dryas.validateProject", c);
+  assert.equal(
+    JSON.parse(vscode.window.activeTextEditor!.document.getText()).project.errors,
+    0,
+    "Generated namespaces must pass native validation",
+  );
   await vscode.commands.executeCommand("dryas.closeProject", c);
   await eventually(
     async () => state.getLanguageServiceStatus(),
@@ -213,6 +256,6 @@ export async function run(): Promise<void> {
   );
   await vscode.workspace.fs.stat(third);
   console.log(
-    "DRYAS host checks passed: dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
+    "DRYAS host checks passed: flat project sources, named source folders, native namespace templates, dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
   );
 }

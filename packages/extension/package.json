@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -116,6 +116,12 @@
         "command": "dryas.refreshProjects",
         "title": "DRYAS: Refresh Projects",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "dryas.newNamespace",
+        "title": "DRYAS: New Namespace…",
+        "icon": "$(new-file)",
+        "enablement": "workspaceFolderCount != 0"
       }
     ],
     "configuration": {
@@ -177,6 +183,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "dryas.newNamespace",
+          "when": "view == systrace.projects",
+          "group": "navigation@1"
+        },
+        {
           "command": "dryas.createProject",
           "when": "view == systrace.projects",
           "group": "navigation"
@@ -193,6 +204,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "dryas.newNamespace",
+          "when": "view == systrace.projects && (viewItem == systraceProject || viewItem == systracesource || viewItem == systracedirectory)",
+          "group": "0_create"
+        },
         {
           "command": "dryas.selectProject",
           "when": "view == systrace.projects && viewItem == systraceProject",

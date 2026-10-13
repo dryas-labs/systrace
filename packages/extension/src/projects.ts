@@ -6,7 +6,8 @@ import {
   type ProjectBrowser,
   type ProjectNode,
 } from "./project-tree.js";
-import { mkdir, realpath, stat } from "node:fs/promises";
+import { resolveModelRoots, publicError } from "@dryas/engine-adapter";
+import { mkdir, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 
 export interface ProjectStatus {
@@ -25,6 +26,18 @@ export function validProjectName(value: string): string | undefined {
   )
     return "Use a folder name without path separators or reserved characters.";
   return undefined;
+}
+
+/** Quoted names support spaces and keywords without adding a SysML lexer to the editor. */
+export function namespaceSource(name: string): string {
+  return `package '${name.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}' {\n\n}\n`;
+}
+
+function validNamespaceName(name: string): string | undefined {
+  return (
+    validProjectName(name) ??
+    (name.startsWith(".") ? "Use a namespace name that does not start with a dot." : undefined)
+  );
 }
 
 export function overlappingRoots(first: string, second: string): boolean {
@@ -65,6 +78,9 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
       vscode.window.createTreeView("systrace.projects", { treeDataProvider: this }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.refresh()),
       vscode.commands.registerCommand("dryas.createProject", () => this.create()),
+      vscode.commands.registerCommand("dryas.newNamespace", (node?: ProjectNode) =>
+        this.newNamespace(node),
+      ),
       vscode.commands.registerCommand("dryas.openProject", (uri?: vscode.Uri) => this.open(uri)),
       vscode.commands.registerCommand("dryas.selectProject", (folder?: vscode.WorkspaceFolder) =>
         this.select(folder),
@@ -229,6 +245,75 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
     } catch {
       void vscode.window.showErrorMessage(
         "The project folder could not be opened. Check that it exists and is accessible.",
+      );
+    }
+  }
+
+  async newNamespace(requested?: ProjectNode): Promise<void> {
+    const node = requested && isContentNode(requested) ? requested : undefined;
+    if (node && !["source", "directory"].includes(node.nodeType)) return;
+    const folder = this.resolve(
+      node ? node.folder : (requested as vscode.WorkspaceFolder | undefined),
+    );
+    if (!folder) {
+      void vscode.window.showInformationMessage("Open a Systrace project first.");
+      return;
+    }
+    try {
+      const roots = await resolveModelRoots(
+        folder.uri.fsPath,
+        vscode.workspace.getConfiguration("dryas", folder.uri).get<string[]>("modelRoots", ["."]),
+      );
+      let directory: string | undefined;
+      if (node) {
+        if (node.uri?.scheme !== "file") return;
+        const [target] = await resolveModelRoots(folder.uri.fsPath, [
+          relative(folder.uri.fsPath, node.uri.fsPath) || ".",
+        ]);
+        if (
+          !target ||
+          !roots.some((source) => {
+            const path = relative(source, target);
+            return !isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`);
+          })
+        ) {
+          void vscode.window.showErrorMessage(
+            "Choose a folder inside the project's configured model sources.",
+          );
+          return;
+        }
+        directory = target;
+      } else if (roots.length === 1) directory = roots[0];
+      else
+        directory = (
+          await vscode.window.showQuickPick(
+            roots.map((source) => ({
+              label: relative(folder.uri.fsPath, source).split(sep).join("/") || folder.name,
+              directory: source,
+            })),
+            { placeHolder: "Choose the source folder for the new namespace" },
+          )
+        )?.directory;
+      if (!directory) return;
+      const name = await vscode.window.showInputBox({
+        title: "New Namespace",
+        prompt: "Namespace name; a matching .sysml file will be created",
+        validateInput: validNamespaceName,
+      });
+      if (!name || validNamespaceName(name) || !this.resolve(folder)) return;
+      const uri = vscode.Uri.file(join(directory, `${name}.sysml`));
+      await writeFile(uri.fsPath, namespaceSource(name), { encoding: "utf8", flag: "wx" });
+      this.contents?.refresh();
+      this.refresh();
+      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), {
+        preview: false,
+        selection: new vscode.Range(1, 0, 1, 0),
+      });
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        (error as NodeJS.ErrnoException).code === "EEXIST"
+          ? "A file with this name already exists. Choose a different namespace name."
+          : publicError(error).message,
       );
     }
   }
