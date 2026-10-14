@@ -1,0 +1,308 @@
+{
+  "license": "Apache-2.0",
+  "description": "Original first-party 16px line icons. Definition and Usage share the same category body; Definition adds one fixed straight vertical bar at the left.",
+  "strokeWidth": 1.3,
+  "palettes": {
+    "light": {
+      "neutral": "#616161",
+      "definition": "#b56a00",
+      "usage": "#007acc"
+    },
+    "dark": {
+      "neutral": "#c5c5c5",
+      "definition": "#e5ab53",
+      "usage": "#75beff"
+    }
+  },
+  "families": {
+    "package": {
+      "paths": [
+        "M8.5 2.5 14 5.25v5.5L8.5 13.5 3 10.75v-5.5z M3 5.25 8.5 8 14 5.25 M8.5 8v5.5 M5.75 3.9l5.5 2.75"
+      ],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "namespace": {
+      "paths": ["M6 2.5H4v11h2 M11 2.5h2v11h-2 M7 5.5v5 M10 5.5v5 M7 5.5l3 5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "alias": {
+      "paths": ["M4 13V8a4 4 0 0 1 4-4h6 M10.5 1.5 14 4l-3.5 3"],
+      "bodyTransform": "translate(0 0.75) scale(1)"
+    },
+    "dependency": {
+      "paths": ["M10.5 4.5 14 8l-3.5 3.5"],
+      "dashedPaths": ["M3 8h9"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "comment": {
+      "paths": ["M4 3h10v8H8l-4 3V3"],
+      "bodyTransform": "translate(0 -0.5) scale(1)"
+    },
+    "documentation": {
+      "paths": ["M4 2h6l3.5 3.5V14H4z M10 2v3.5h3.5 M6.5 8h4.5 M6.5 10.5h4.5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "textual-representation": {
+      "paths": ["M4 2.5v11 M6.5 3.5h7 M10 3.5v9 M7.5 12.5h5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "part": {
+      "paths": ["M8.5 2.5 14 5.25v5.5L8.5 13.5 3 10.75v-5.5z M3 5.25 8.5 8 14 5.25 M8.5 8v5.5"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "item": {
+      "paths": ["M8.5 2.5 14 8l-5.5 5.5L3 8z M6.5 8h4"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "attribute": {
+      "paths": ["M6 3C3 5 3 11 6 13 M11 3c3 2 3 8 0 10 M7 5.5l3 5 M10 5.5l-3 5"],
+      "bodyTransform": "translate(0.25 0) scale(1)"
+    },
+    "enumeration": {
+      "paths": ["M4 2.5v11 M7 4h6.5 M7 8h6.5 M7 12h6.5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "metadata": {
+      "paths": [
+        "M13 12a5.5 5.5 0 1 1 1-4v2a1.5 1.5 0 0 1-3 0V5.5 M11 8a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0"
+      ],
+      "bodyTransform": "translate(1.0714 -0.4056) scale(0.9592)"
+    },
+    "occurrence": {
+      "paths": ["M14 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0 M8.5 4.5V8l3 2"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "individual": {
+      "paths": ["M11 4.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0 M3.5 14v-2a5 4 0 0 1 10 0v2"],
+      "bodyTransform": "translate(0.5 0) scale(1)"
+    },
+    "port": {
+      "paths": ["M6 1.5v4 M11 1.5v4 M4 5.5h9v3a4.5 4.5 0 0 1-9 0z M8.5 13v1.5"],
+      "bodyTransform": "translate(0.3077 0.6154) scale(0.9231)"
+    },
+    "interface": {
+      "paths": ["M4 2.5v11 M4 8h3.5 M11 4a4 4 0 0 0 0 8 M11 8h3"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "connection": {
+      "paths": ["M5 8h7 M5 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0 M15 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0"],
+      "bodyTransform": "translate(3.25 2) scale(0.75)"
+    },
+    "flow": {
+      "paths": ["M3 4c4 0 3 8 8 8h3 M11 9l3 3-3 3"],
+      "bodyTransform": "translate(1.1364 -1.0682) scale(0.9545)"
+    },
+    "allocation": {
+      "paths": ["M4 2.5v11 M4 8h10 M10.5 4.5 14 8l-3.5 3.5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "action": {
+      "paths": ["M5 2.5 14 8l-9 5.5z"],
+      "bodyTransform": "translate(-1 0) scale(1)"
+    },
+    "state": {
+      "paths": ["M7 3h4a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "calculation": {
+      "paths": ["M6.5 13h-2l2.5-10h2 M4 6h6 M10 8l4 5 M14 8l-4 5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "constraint": {
+      "paths": [
+        "M6 2.5H5a1 1 0 0 0-1 1v2.5a2 2 0 0 1-1 2 2 2 0 0 1 1 2v2.5a1 1 0 0 0 1 1h1 M11 2.5h1a1 1 0 0 1 1 1v2.5a2 2 0 0 0 1 2 2 2 0 0 0-1 2v2.5a1 1 0 0 1-1 1h-1 M7 6.5h3 M7 9.5h3"
+      ],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "requirement": {
+      "paths": ["M4 2h9.5v12H4z M8.5 4.5v4 M8.5 11v.2"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "concern": {
+      "paths": ["M8.5 2 14 4v4c0 3-3 5-5.5 6C6 13 3 11 3 8V4z M8.5 5.5v3 M8.5 11v.2"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "case": {
+      "paths": ["M14 8a5.5 4.5 0 1 1-11 0 5.5 4.5 0 0 1 11 0"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "analysis-case": {
+      "paths": ["M14 8a5.5 4.5 0 1 1-11 0 5.5 4.5 0 0 1 11 0 M6 10l2-4 2 4 M7 8.5h2"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "verification-case": {
+      "paths": ["M14 8a5.5 4.5 0 1 1-11 0 5.5 4.5 0 0 1 11 0 M6.5 6l2 4 2-4"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "use-case": {
+      "paths": ["M14 8a5.5 4.5 0 1 1-11 0 5.5 4.5 0 0 1 11 0 M6.5 6v2a2 2 0 0 0 4 0V6"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "view": {
+      "paths": ["M3 8c3-6 8-6 11 0-3 6-8 6-11 0z M10.5 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "viewpoint": {
+      "paths": ["M4 13V3 M4 8l10-5v10z M4 8h5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "rendering": {
+      "paths": ["M4 13 13 4 M10.5 2.5v3 M9 4h3 M5.5 3v2 M4.5 4h2 M12 10v4 M10 12h4"],
+      "bodyTransform": "translate(0 -0.25) scale(1)"
+    },
+    "binding": {
+      "paths": ["M3 5.5h11 M3 10.5h11"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "succession": {
+      "paths": ["M3 2.5v11 M3 8h11 M10.5 4.5 14 8l-3.5 3.5 M7 6v4"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "connector-end": {
+      "paths": ["M4 2.5v11 M4 8h7 M14 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "cross-feature": {
+      "paths": ["M4 3l10 10 M4 13 14 3 M4 6V3h3 M11 13h3v-3"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "multiplicity": {
+      "paths": ["M6 2.5H4v11h2 M11 2.5h2v11h-2 M7.2 8v.2 M9.8 8v.2"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "reference": {
+      "paths": ["M6.5 5H5a3 3 0 0 0 0 6h1.5 M10 5h1.5a3 3 0 0 1 0 6H10 M5.5 8H11"],
+      "bodyTransform": "translate(2.32 1.28) scale(0.84)"
+    },
+    "class": {
+      "paths": ["M4 2.5h10v11H4z M4 6h10 M6.5 9h5 M6.5 11h3"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "classifier": {
+      "paths": ["M4 2.5h10v11H4z M11 5.5a3 3 0 1 0 0 5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "struct": {
+      "paths": ["M4 2.5h10v11H4z M4 7h10 M8 7v6.5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "datatype": {
+      "paths": ["M6 2.5H4v11h2 M11 2.5h2v11h-2 M7 5v6h1a3 3 0 0 0 0-6z"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "association": {
+      "paths": ["M7 8h7 M3 4l4 4-4 4L1 8z"],
+      "bodyTransform": "translate(3.1923 1.5385) scale(0.8077)"
+    },
+    "metaclass": {
+      "paths": ["M4 2.5h10v11H4z M6 10V6l3 3 3-3v4"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "type": {
+      "paths": ["M4 3h10 M9 3v10 M6 13h6"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "feature": {
+      "paths": ["M4 2.5v11 M4 3h10 M4 7.5h7"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "behavior": {
+      "paths": ["M5 2.5 14 8l-9 5.5z"],
+      "bodyTransform": "translate(-1 0) scale(1)"
+    },
+    "function": {
+      "paths": ["M6.5 13h-2l2.5-10h2 M4 6h6 M12 4.5a5 5 0 0 0 0 7"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "predicate": {
+      "paths": ["M6 2.5H4v11h2 M11 2.5h2v11h-2 M7 11V5h1.5a2 2 0 0 1 0 4H7"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "transition": {
+      "paths": ["M4 13V8a4 4 0 0 1 4-4h6 M10.5 1.5 14 4l-3.5 3 M4 11h6 M7.5 8.5 10 11l-2.5 2.5"],
+      "bodyTransform": "translate(0 0.5) scale(1)"
+    },
+    "decision": {
+      "paths": ["M8.5 2.5 14 8l-5.5 5.5L3 8z M8.5 5.5v3 M8.5 10.5v.2"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "fork": {
+      "paths": ["M4 2.5v11 M4 8h4 M8 8l5.5-5 M8 8l5.5 5 M10.5 3H14v3.5 M10.5 13H14V9.5"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "join": {
+      "paths": ["M4 2.5v11 M4 3l5 5-5 5 M9 8h5 M11 5l3 3-3 3"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "merge": {
+      "paths": ["M3 3l4 5-4 5 M7 8l3-3 4 3-4 3z"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "send": {
+      "paths": ["M4 3h6l4 5-4 5H4z"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "accept": {
+      "paths": ["M4 3h10v10H4l4-5z"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "assignment": {
+      "paths": ["M4 2.5v11 M14 8H6 M9 5 6 8l3 3"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "terminate": {
+      "paths": ["M4 3l10 10 M4 13 14 3"],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "loop": {
+      "paths": ["M4 6a5.5 5.5 0 1 1 0 4 M4 2.5V6h3.5"],
+      "bodyTransform": "translate(0.0465 0.093) scale(0.9884)"
+    },
+    "condition": {
+      "paths": [
+        "M6 2.5H4v11h2 M11 2.5h2v11h-2 M7.5 5.5a1.5 1.5 0 0 1 3 0c0 1.5-2 1.5-2 3 M8.5 11v.2"
+      ],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "subject": {
+      "paths": [
+        "M6 2.5H4v11h2 M11 2.5h2v11h-2 M10 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0 M6.5 11v-1a2 2 0 0 1 4 0v1"
+      ],
+      "bodyTransform": "translate(0 0) scale(1)"
+    },
+    "relationship": {
+      "paths": ["M3 3v10 M3 8h11 M10.5 4.5 14 8l-3.5 3.5"],
+      "bodyTransform": "translate(1.1364 0.3636) scale(0.9545)"
+    },
+    "other": {
+      "paths": ["M5.5 4.5a3.5 3 0 0 1 7 0c0 2.5-4 2.5-4 5 M8.5 13v.2"],
+      "bodyTransform": "translate(-1.5 0.65) scale(1)"
+    }
+  },
+  "neutral": {
+    "project": {
+      "paths": ["M1.5 4h5L8 5.5h6.5v8h-13z M6 8l-2 1.5L6 11 M10 8l2 1.5-2 1.5"]
+    },
+    "folder": {
+      "paths": ["M1.5 4h5L8 5.5h6.5v8h-13z"]
+    },
+    "file": {
+      "paths": ["M4 1.5h5l3 3v10H4z M9 1.5v3h3 M6 8l-1 1 1 1 M10 8l1 1-1 1"]
+    },
+    "library": {
+      "paths": ["M2 2v12 M5 2v12 M9 2l4 12 M1 14h6"]
+    },
+    "project-reference": {
+      "paths": [
+        "M1.5 4h5L8 5.5h6.5V8 M1.5 4v9.5H5 M8 10H7a2 2 0 0 0 0 4h1 M12 10h1a2 2 0 0 1 0 4h-1 M8 12h4"
+      ]
+    },
+    "references-folder": {
+      "paths": ["M1.5 4h5L8 5.5h6.5v8h-13z M4 9.5h6 M8 7.5l2 2-2 2"]
+    },
+    "message": {
+      "paths": ["M2 2.5h12v9H7l-4 3v-3H2z M5 6h6 M5 8.5h4"]
+    }
+  },
+  "definitionMarker": "M1.5 2.5v11"
+}

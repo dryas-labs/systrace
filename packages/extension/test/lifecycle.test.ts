@@ -45,6 +45,8 @@ vi.mock("vscode", () => {
     return { dispose() {} };
   };
   return {
+    lm: undefined,
+    McpStdioServerDefinition: undefined,
     Uri: { file: host.uri },
     TreeItemCollapsibleState: { None: 0 },
     TreeItem: class {},
@@ -63,6 +65,7 @@ vi.mock("vscode", () => {
     StatusBarAlignment: { Left: 1 },
     window: {
       createTreeView: () => ({ dispose() {} }),
+      registerWebviewViewProvider: () => ({ dispose() {} }),
       createOutputChannel: () => ({
         info: (text: string) => host.logs.push(text),
         error: (text: string) => host.logs.push(text),

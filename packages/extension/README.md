@@ -5,14 +5,14 @@
 SysML v2 editing for VS Code and Cursor, powered by an external language engine.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.15 uses language engine build `v0.9.2-dryas.5`. Selected completion details show
+Version 0.1.20 uses language engine build `v0.9.2-dryas.6`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
 spelling; undocumented elements show their declaration and source only.
 Use the details arrow, or Ctrl+Space while the suggestion list is open, to expand
 the editor's native detail panel. Update both external engine executables; if
-you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.5`.
+you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.6`.
 
 See [Language engine](../../docs/language-engine.md) for the current selection.
 
@@ -91,7 +91,7 @@ to add an existing folder. Each folder is a project root. Click a project to mak
 default target for saved validation and MCP configuration; switching editor tabs does not
 change that selection. Other projects remain editable. Closing a project removes its
 workspace entry and stops this extension's services, without deleting files or changing an
-external agent's existing MCP connection. Save the VS Code workspace to reopen its project list.
+manually configured external agent's existing MCP connection. Save the VS Code workspace to reopen its project list.
 
 Model files can live at the project root or in subfolders. Use **Configure Model Source
 Folders** to save the scope in `.systrace/project.json`. Existing projects without this file
@@ -197,3 +197,51 @@ folders and overlapping project roots are reported as project configuration erro
 version rejects reference cycles as a loading policy, not a SysML language rule. Projects
 must be on the same drive for relative references. Saved validation reports dependency files
 under `.references/<id>/…`, with `content.references` mapping these IDs to projects.
+
+## Project tree display
+
+**DRYAS › Project Tree: Display Mode** is a User setting shared by all projects.
+The default **Compact — one line** uses the editor's native tree: element name,
+explicit type and declaration kind. **Detailed — two lines** uses a custom sidebar
+presentation, with the name above its kind and type. Both use the same project
+provider and commands. Switching modes does not reconnect the language engine or
+change project/MCP scope. Expansion state is kept separately by each view.
+
+Declaration kinds, reference modifiers and explicit types come from the language
+engine's document outline. Systrace does not parse model text to invent missing
+labels. This development version requires engine build `v0.9.2-dryas.6` for the
+outline details. Symbols without presentation information retain a generic icon.
+
+Both display modes share the same icons and category mapping. Definitions add a straight
+vertical bar of fixed length and spacing to the left of the category's base shape; usages
+use the same base shape without the bar. Amber and blue reinforce the distinction.
+Packages, comments, documentation and aliases have separate neutral icons.
+Metadata uses an `@` motif; multiplicity uses brackets, not `#`. A `ref part` keeps its part
+icon and native `ref part` label. KerML types and features use the corresponding visual
+families while retaining their native kind names. These are Systrace UI conventions.
+
+The display reflects only the distinctions supplied by the engine. Unknown categories use a
+question-mark icon with the original label. For example, an `enum` label alone cannot tell
+an enumeration literal from a usage.
+
+## Workspace MCP integration
+
+In VS Code hosts that support MCP server definition providers, the extension automatically
+registers one server for each local project in a trusted workspace. Labels include the project
+name and a workspace-persisted number to distinguish duplicate names. Opening or closing projects
+and changing engine settings updates registration. Each server stays bound to its project;
+selecting another project does not retarget an agent connection. Project references are read
+from the shared project configuration.
+
+Choose **Manage Workspace MCP Servers** from the Systrace project or sidebar menu, or run
+**DRYAS: Manage Workspace MCP Servers**. This opens the host's MCP server list with actual
+connection status, start, stop, restart, enable, disable and output controls. The host owns
+enablement and startup policy; registration alone does not mean connected. The project tree's
+`connected` status still refers to LSP. Host trust and tool authorization settings apply.
+
+Automatic registration uses the editor's bundled Node.js and does not create or overwrite
+workspace or global MCP configuration files. If the same project was previously registered
+manually, disable that old entry in the host to avoid duplicate tools.
+**Show MCP Configuration** remains available for other agent clients; its exported configuration
+uses the system `node` command. Editors without the provider API retain manual configuration,
+including Cursor versions that do not implement this VS Code interface.

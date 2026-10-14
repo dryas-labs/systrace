@@ -22,6 +22,79 @@ export interface LibraryDocumentProtocol {
   catalog?(transport: LibraryCatalogTransport, scratchUri: string): Promise<LibraryCatalogEntry[]>;
 }
 
+/** Display metadata supplied by the language engine, never inferred from source text. */
+export interface OutlinePresentation {
+  kind: string;
+  declaredType?: string;
+  family:
+    | "package"
+    | "namespace"
+    | "alias"
+    | "dependency"
+    | "comment"
+    | "documentation"
+    | "textual-representation"
+    | "part"
+    | "item"
+    | "attribute"
+    | "enumeration"
+    | "metadata"
+    | "occurrence"
+    | "individual"
+    | "port"
+    | "interface"
+    | "connection"
+    | "flow"
+    | "allocation"
+    | "action"
+    | "state"
+    | "calculation"
+    | "constraint"
+    | "requirement"
+    | "concern"
+    | "case"
+    | "analysis-case"
+    | "verification-case"
+    | "use-case"
+    | "view"
+    | "viewpoint"
+    | "rendering"
+    | "binding"
+    | "succession"
+    | "connector-end"
+    | "cross-feature"
+    | "multiplicity"
+    | "reference"
+    | "class"
+    | "classifier"
+    | "struct"
+    | "datatype"
+    | "association"
+    | "metaclass"
+    | "type"
+    | "feature"
+    | "behavior"
+    | "function"
+    | "predicate"
+    | "transition"
+    | "decision"
+    | "fork"
+    | "join"
+    | "merge"
+    | "send"
+    | "accept"
+    | "assignment"
+    | "terminate"
+    | "loop"
+    | "condition"
+    | "subject"
+    | "relationship"
+    | "other";
+  role: "definition" | "usage" | "other";
+  definition: boolean;
+  reference: boolean;
+}
+
 /** LSP process and optional library access. No editor or model-execution dependency. */
 export interface LanguageServiceBackend {
   readonly id: string;
@@ -35,4 +108,5 @@ export interface LanguageServiceBackend {
     environment(): NodeJS.ProcessEnv;
   };
   readonly standardLibrary: LibraryDocumentProtocol;
+  readonly outlinePresentation?: (detail: string) => OutlinePresentation | undefined;
 }

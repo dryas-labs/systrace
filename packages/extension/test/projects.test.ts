@@ -6,7 +6,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import type { ExtensionContext, WorkspaceFolder } from "vscode";
 
 const host = vi.hoisted(() => {
-  const uri = (path: string) => ({ fsPath: path, scheme: "file", toString: () => path });
+  const uri = (path: string) => ({ fsPath: path, path, scheme: "file", toString: () => path });
   return {
     uri,
     folders: [] as { uri: ReturnType<typeof uri>; name: string; index: number }[],
@@ -65,7 +65,10 @@ vi.mock("vscode", () => ({
   TreeItem: class {
     constructor(public label: string) {}
   },
-  ThemeIcon: class {},
+  ThemeIcon: class {
+    constructor(public id: string) {}
+  },
+  SymbolKind: { Namespace: 2, Package: 3, Object: 18 },
   EventEmitter: class {
     event = () => ({ dispose() {} });
     fire() {}
@@ -73,6 +76,7 @@ vi.mock("vscode", () => ({
   },
   window: {
     createTreeView: () => ({ dispose() {} }),
+    registerWebviewViewProvider: () => ({ dispose() {} }),
     showInputBox: async () => host.names.shift(),
     showWarningMessage: host.warning,
     withProgress: async (_options: unknown, run: () => Promise<unknown>) => run(),
@@ -145,6 +149,7 @@ vi.mock("vscode", () => ({
 import { Projects, validProjectName } from "../src/projects.js";
 import {
   AdapterError,
+  DEFAULT_LANGUAGE_ENGINE_PROVIDER,
   readProjectDefinition,
   readProjectSnapshot,
   writeProjectDefinition,
@@ -557,4 +562,57 @@ it("hides existing references, reports a duplicate folder without rewriting conf
   await projects.addReference(consumer);
   expect(host.pickerItems.at(-1)).toEqual(["B", "C", "Browse for Project Folder…"]);
   expect(projects.current?.uri.fsPath).toBe(c);
+});
+
+it("presents engine-provided kinds and types without deriving them from model text", async () => {
+  const file = join(root, "source.sysml");
+  await writeFile(file, "engine-owned declaration source");
+  await projects.open(host.uri(root) as unknown as import("vscode").Uri);
+  const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
+  const symbols = [
+    { name: "Vehicle", detail: "part def", kind: 18, range, selectionRange: range, children: [] },
+    {
+      name: "mass",
+      detail: "attribute : ScalarValues::Real",
+      kind: 18,
+      range,
+      selectionRange: range,
+      children: [],
+    },
+    {
+      name: "driver",
+      detail: "ref part : Person",
+      kind: 18,
+      range,
+      selectionRange: range,
+      children: [],
+    },
+  ];
+  const tree = new ProjectTree(
+    {
+      symbols: async () => symbols as unknown as import("vscode").DocumentSymbol[],
+      libraries: async () => [],
+      refreshLibraries() {},
+      presentation: DEFAULT_LANGUAGE_ENGINE_PROVIDER.languageService.outlinePresentation!,
+    },
+    () => {},
+  );
+  try {
+    const node = (await tree.children(projects.current!)).find(
+      (entry) => entry.nodeType === "file",
+    )!;
+    const entries = await tree.children(node);
+    const items = entries.map((entry) => tree.item(entry));
+    expect(items.map((item) => item.label)).toEqual([
+      "Vehicle",
+      "mass : ScalarValues::Real",
+      "driver : Person",
+    ]);
+    expect(items.map((item) => item.description)).toEqual(["part def", "attribute", "ref part"]);
+    expect(
+      items.map((item) => basename((item.iconPath as { dark: import("vscode").Uri }).dark.fsPath)),
+    ).toEqual(["part-definition.svg", "attribute-usage.svg", "part-usage.svg"]);
+  } finally {
+    tree.dispose();
+  }
 });

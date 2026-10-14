@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
+import { projectIconName, projectIconPaths } from "./project-icons.js";
 import { lstat, readdir } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import {
@@ -7,6 +8,7 @@ import {
   resolveModelRoots,
   readProjectDefinition,
   resolveProjectGraph,
+  type OutlinePresentation,
 } from "@dryas/engine-adapter";
 
 export interface LibraryNamespace {
@@ -21,6 +23,7 @@ export interface ProjectBrowser {
   ): Promise<(vscode.DocumentSymbol | vscode.SymbolInformation)[]>;
   libraries(folder: vscode.WorkspaceFolder): Promise<LibraryNamespace[]>;
   refreshLibraries(): void;
+  presentation?(detail: string): OutlinePresentation | undefined;
   referenceUri?(folder: vscode.WorkspaceFolder, source: vscode.Uri): vscode.Uri;
 }
 export interface ContentNode {
@@ -45,6 +48,7 @@ export interface ContentNode {
   uri?: vscode.Uri;
   range?: vscode.Range;
   detail?: string;
+  presentation?: OutlinePresentation;
   kind?: vscode.SymbolKind;
   children?: ContentNode[];
 }
@@ -63,6 +67,7 @@ export class ProjectTree implements vscode.Disposable {
   constructor(
     private readonly browser: ProjectBrowser,
     private readonly changed: (node?: ProjectNode) => void,
+    private readonly extensionPath = "",
   ) {
     this.watchFolders();
     this.disposables.push(
@@ -71,7 +76,11 @@ export class ProjectTree implements vscode.Disposable {
         this.refresh();
       }),
       vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration("dryas.modelRoots")) this.refresh();
+        if (
+          event.affectsConfiguration("dryas.modelRoots") ||
+          event.affectsConfiguration("dryas.projectTree.displayMode")
+        )
+          this.refresh();
       }),
       vscode.workspace.onDidChangeTextDocument((event) => {
         if (event.contentChanges.length && ["sysml", "kerml"].includes(event.document.languageId))
@@ -325,6 +334,8 @@ export class ProjectTree implements vscode.Disposable {
         range: hierarchical ? symbol.selectionRange : symbol.location.range,
         detail: hierarchical ? symbol.detail : symbol.containerName,
       };
+      const presentation = node.detail && this.browser.presentation?.(node.detail);
+      if (presentation) node.presentation = presentation;
       node.children = hierarchical ? this.elements(node, symbol.children) : [];
       return node;
     });
@@ -351,18 +362,10 @@ export class ProjectTree implements vscode.Disposable {
             ? "systraceTransitiveReference"
             : "systraceProjectReference"
           : "systraceReadOnlyReference";
-    const icons: Record<ContentNode["nodeType"], string> = {
-      source: "root-folder",
-      directory: "folder",
-      file: "file-code",
-      libraries: "library",
-      namespace: "package",
-      element: "symbol-field",
-      message: "info",
-      references: "references",
-      reference: "project",
-    };
-    item.iconPath = new vscode.ThemeIcon(icons[node.nodeType]);
+    item.iconPath = projectIconPaths(
+      this.extensionPath,
+      projectIconName(node.nodeType, node.presentation, node.kind),
+    );
     if (node.nodeType === "reference") {
       item.description = "Read-only";
       item.tooltip = `${node.referencePath}\nUses the referenced project's saved model sources.`;
@@ -371,13 +374,19 @@ export class ProjectTree implements vscode.Disposable {
       item.tooltip =
         "Library namespaces exposed in this project's language-engine context. Declarations only; imported members are not expanded.";
     } else if (node.nodeType === "element") {
+      const presentation = node.presentation;
+      if (presentation) {
+        item.label =
+          node.label + (presentation.declaredType ? " : " + presentation.declaredType : "");
+      }
       item.description =
+        presentation?.kind ||
         node.detail ||
-        ([vscode.SymbolKind.Namespace, vscode.SymbolKind.Package].includes(node.kind!)
-          ? "package"
-          : "");
-      if ([vscode.SymbolKind.Namespace, vscode.SymbolKind.Package].includes(node.kind!))
-        item.iconPath = new vscode.ThemeIcon("package");
+        (node.kind === vscode.SymbolKind.Namespace
+          ? "namespace"
+          : node.kind === vscode.SymbolKind.Package
+            ? "package"
+            : "");
       item.tooltip = `${node.label}${node.detail ? `\n${node.detail}` : ""}\n${basename(node.uri!.path)}:${node.range!.start.line + 1}`;
     } else if (node.uri) {
       item.resourceUri = node.uri;

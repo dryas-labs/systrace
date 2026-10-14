@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
+import { projectIconPaths } from "./project-icons.js";
+import { DetailedProjects } from "./detailed-projects.js";
 import {
   ProjectTree,
   isContentNode,
@@ -56,6 +58,7 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
   private readonly changed = new vscode.EventEmitter<ProjectNode | undefined>();
   readonly onDidChangeTreeData = this.changed.event;
   private selected: string | undefined;
+  readonly detailedView: DetailedProjects;
   private readonly contents: ProjectTree | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -72,7 +75,11 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
   ) {
     this.selected = context.workspaceState.get<string>("dryas.currentProject");
     if (browser) {
-      this.contents = new ProjectTree(browser, (node) => this.changed.fire(node));
+      this.contents = new ProjectTree(
+        browser,
+        (node) => this.changed.fire(node),
+        context.extensionPath,
+      );
       this.disposables.push(this.contents);
     }
     this.disposables.push(
@@ -82,8 +89,10 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
         this.refresh();
       }),
     );
+    this.detailedView = new DetailedProjects(context, this);
     this.disposables.push(
       vscode.window.createTreeView("systrace.projects", { treeDataProvider: this }),
+      this.detailedView,
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.refresh()),
       vscode.commands.registerCommand("dryas.createProject", () => this.create()),
       // Title actions receive the focused tree element from the editor. A tree
@@ -147,7 +156,7 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
     const item = new vscode.TreeItem(folder.name, vscode.TreeItemCollapsibleState.Collapsed);
     item.id = folder.uri.toString();
     item.contextValue = "systraceProject";
-    item.iconPath = new vscode.ThemeIcon("project");
+    item.iconPath = projectIconPaths(this.context.extensionPath, "project");
     const current = this.current?.uri.toString() === folder.uri.toString();
     const status = this.status(folder);
     item.description = [current ? "Current" : "", status?.connection ?? "Opening"]

@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.15",
+  "version": "0.1.20",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -25,7 +25,8 @@
   "activationEvents": [
     "onLanguage:sysml",
     "onLanguage:kerml",
-    "onView:systrace.projects"
+    "onView:systrace.projects",
+    "onStartupFinished"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -147,6 +148,54 @@
         "command": "dryas.openReferencedProject",
         "title": "DRYAS: Open Referenced Project",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "dryas.detailed.selectProject",
+        "title": "DRYAS: Select Current Project"
+      },
+      {
+        "command": "dryas.detailed.closeProject",
+        "title": "DRYAS: Close Project"
+      },
+      {
+        "command": "dryas.detailed.validateProject",
+        "title": "DRYAS: Validate Saved Project"
+      },
+      {
+        "command": "dryas.detailed.showMcpConfiguration",
+        "title": "DRYAS: Show MCP Configuration"
+      },
+      {
+        "command": "dryas.detailed.configureModelRoots",
+        "title": "DRYAS: Configure Model Source Folders"
+      },
+      {
+        "command": "dryas.detailed.newNamespace",
+        "title": "DRYAS: New Namespace…"
+      },
+      {
+        "command": "dryas.detailed.deleteNamespace",
+        "title": "DRYAS: Delete Namespace…"
+      },
+      {
+        "command": "dryas.detailed.addProjectReference",
+        "title": "DRYAS: Add Project Reference…"
+      },
+      {
+        "command": "dryas.detailed.removeProjectReference",
+        "title": "DRYAS: Remove Project Reference"
+      },
+      {
+        "command": "dryas.detailed.openReferencedProject",
+        "title": "DRYAS: Open Referenced Project"
+      },
+      {
+        "command": "dryas.manageMcpServers",
+        "title": "DRYAS: Manage Workspace MCP Servers"
+      },
+      {
+        "command": "dryas.detailed.manageMcpServers",
+        "title": "DRYAS: Manage Workspace MCP Servers"
       }
     ],
     "configuration": {
@@ -177,7 +226,7 @@
         },
         "dryas.expectedEngineVersion": {
           "type": "string",
-          "default": "v0.9.2-dryas.5",
+          "default": "v0.9.2-dryas.6",
           "scope": "resource",
           "description": "Required language engine build version, checked before use."
         },
@@ -188,6 +237,24 @@
           "maximum": 300000,
           "scope": "resource",
           "description": "Deadline for a language engine request in milliseconds."
+        },
+        "dryas.projectTree.displayMode": {
+          "type": "string",
+          "default": "compact",
+          "enum": [
+            "compact",
+            "detailed"
+          ],
+          "enumItemLabels": [
+            "Compact — one line",
+            "Detailed — two lines"
+          ],
+          "enumDescriptions": [
+            "Show the element name and type on one line, with its kind beside it.",
+            "Show the element name above its kind and type."
+          ],
+          "scope": "application",
+          "description": "Personal project-tree display preference. Applies to all projects without changing model files or engine sessions."
         }
       }
     },
@@ -195,7 +262,14 @@
       "systrace": [
         {
           "id": "systrace.projects",
-          "name": "Projects"
+          "name": "Projects",
+          "when": "config.dryas.projectTree.displayMode != detailed"
+        },
+        {
+          "id": "systrace.projectsDetailed",
+          "name": "Projects",
+          "type": "webview",
+          "when": "config.dryas.projectTree.displayMode == detailed"
         }
       ]
     },
@@ -209,23 +283,28 @@
       "view/title": [
         {
           "command": "dryas.newNamespace",
-          "when": "view == systrace.projects",
+          "when": "view == systrace.projects || view == systrace.projectsDetailed",
           "group": "navigation@1"
         },
         {
           "command": "dryas.createProject",
-          "when": "view == systrace.projects",
+          "when": "view == systrace.projects || view == systrace.projectsDetailed",
           "group": "navigation"
         },
         {
           "command": "dryas.openProject",
-          "when": "view == systrace.projects",
+          "when": "view == systrace.projects || view == systrace.projectsDetailed",
           "group": "navigation"
         },
         {
           "command": "dryas.refreshProjects",
-          "when": "view == systrace.projects",
+          "when": "view == systrace.projects || view == systrace.projectsDetailed",
           "group": "navigation"
+        },
+        {
+          "command": "dryas.manageMcpServers",
+          "when": "view == systrace.projects || view == systrace.projectsDetailed",
+          "group": "2_tools"
         }
       ],
       "view/item/context": [
@@ -278,6 +357,11 @@
           "command": "dryas.openReferencedProject",
           "when": "view == systrace.projects && (viewItem == systraceProjectReference || viewItem == systraceTransitiveReference)",
           "group": "1_references"
+        },
+        {
+          "command": "dryas.manageMcpServers",
+          "when": "view == systrace.projects && viewItem == systraceProject",
+          "group": "2_tools"
         }
       ],
       "explorer/context": [
@@ -303,6 +387,107 @@
         {
           "command": "dryas.openReferencedProject",
           "when": "false"
+        },
+        {
+          "command": "dryas.detailed.selectProject",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.closeProject",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.validateProject",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.showMcpConfiguration",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.configureModelRoots",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.newNamespace",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.deleteNamespace",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.addProjectReference",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.removeProjectReference",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.openReferencedProject",
+          "when": "false"
+        },
+        {
+          "command": "dryas.detailed.manageMcpServers",
+          "when": "false"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "dryas.detailed.selectProject",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.closeProject",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.validateProject",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.showMcpConfiguration",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.configureModelRoots",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.newNamespace",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject || webviewSection == systracesource || webviewSection == systracedirectory)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.deleteNamespace",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceNamespaceFile)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.addProjectReference",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject || webviewSection == systracereferences)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.removeProjectReference",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProjectReference)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.openReferencedProject",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProjectReference || webviewSection == systraceTransitiveReference)",
+          "group": "systrace"
+        },
+        {
+          "command": "dryas.detailed.manageMcpServers",
+          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
+          "group": "systrace"
         }
       ]
     },
@@ -314,7 +499,13 @@
           "icon": "media/systrace.svg"
         }
       ]
-    }
+    },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "systrace.workspace",
+        "label": "Systrace Workspace Projects"
+      }
+    ]
   },
   "dependencies": {
     "@dryas/engine-adapter": "0.1.0",

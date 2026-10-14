@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { join, relative, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
+import { WorkspaceMcp, mcpArguments } from "./workspace-mcp.js";
 import { Projects, overlappingRoots } from "./projects.js";
 import {
   LanguageClient,
@@ -112,6 +113,7 @@ export class Manager {
   );
   private disposed = false;
   private readonly projectUi: Projects;
+  readonly workspaceMcp: WorkspaceMcp;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -124,6 +126,7 @@ export class Manager {
       () => this.updateStatusBar(),
       {
         symbols: (folder, uri) => this.documentSymbols(folder, uri),
+        presentation: (detail) => this.provider.languageService.outlinePresentation?.(detail),
         libraries: async (folder) => {
           this.runningProject(folder);
           const library = this.libraries.get(folder.uri.toString());
@@ -176,6 +179,7 @@ export class Manager {
       },
       () => this.refresh("configuration"),
     );
+    this.workspaceMcp = new WorkspaceMcp(context, (folder) => options(folder, this.provider));
     this.statusBar.name = "DRYAS language service";
     this.statusBar.command = "dryas.showLanguageServiceStatus";
     context.subscriptions.push(
@@ -905,18 +909,7 @@ export class Manager {
     config.modelRoots = (
       await readProjectDefinition(folder.uri.fsPath, config.modelRoots)
     ).modelRoots;
-    const args = [
-      join(this.context.extensionPath, "dist", "mcp.cjs"),
-      "--project",
-      folder.uri.fsPath,
-      "--engine",
-      config.engine.executable,
-      "--expected-version",
-      config.engine.expectedVersion!,
-      "--timeout-ms",
-      String(config.engine.timeoutMs),
-    ];
-    for (const root of config.modelRoots ?? ["."]) args.push("--model-root", root);
+    const args = mcpArguments(this.context.extensionPath, config);
     const document = await vscode.workspace.openTextDocument({
       language: "json",
       content: JSON.stringify({ mcpServers: { dryas: { command: "node", args } } }, null, 2),
@@ -951,6 +944,7 @@ export class Manager {
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    this.workspaceMcp.dispose();
     this.projectUi.dispose();
     await this.refreshQueue.dispose();
     await Promise.all(
@@ -965,13 +959,18 @@ export class Manager {
 
 export async function activate(
   context: vscode.ExtensionContext,
-): Promise<{ getLanguageServiceStatus: () => ServiceStatus[]; getProjectTree: () => Projects }> {
+): Promise<{
+  getLanguageServiceStatus: () => ServiceStatus[];
+  getProjectTree: () => Projects;
+  getWorkspaceMcp: () => WorkspaceMcp;
+}> {
   manager = new Manager(context);
   await manager.refresh("activation");
   const current = manager;
   return {
     getLanguageServiceStatus: () => current.getStatus(),
     getProjectTree: () => current.getProjectTree(),
+    getWorkspaceMcp: () => current.workspaceMcp,
   };
 }
 export async function deactivate(): Promise<void> {

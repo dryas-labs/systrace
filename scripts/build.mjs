@@ -4,15 +4,18 @@ import { mkdir, copyFile, readFile, writeFile, readdir } from "node:fs/promises"
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeDebugEnvironment } from "./config.mjs";
+import { generateProjectIcons } from "./generate-project-icons.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 await writeDebugEnvironment();
+await generateProjectIcons();
 const jobs = [
   ["packages/engine-adapter/src/index.ts", "packages/engine-adapter/dist/index.js", "esm"],
   ["packages/mcp-server/src/server.ts", "packages/mcp-server/dist/server.js", "esm"],
   ["packages/mcp-server/src/cli.ts", "packages/mcp-server/dist/cli.cjs", "cjs"],
   ["packages/extension/src/extension.ts", "packages/extension/dist/extension.cjs", "cjs"],
   ["test/host/index.ts", "test/host/dist/index.cjs", "cjs"],
+  ["test/host/mcp.ts", "test/host/dist/mcp.cjs", "cjs"],
   ["test/host/projects.ts", "test/host/dist/projects.cjs", "cjs"],
   ["test/host/references.ts", "test/host/dist/references.cjs", "cjs"],
 ];

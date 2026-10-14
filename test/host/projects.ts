@@ -107,8 +107,11 @@ export async function run(): Promise<void> {
   assert(packageNode);
   const battery = (await children(packageNode)).find((node) => node.label === "Battery");
   assert(battery);
+  assert.equal(tree.getTreeItem(battery).description, "part def");
   const output = (await children(battery)).find((node) => node.label === "output");
   assert(output);
+  assert.equal(tree.getTreeItem(output).label, "output : PowerPort");
+  assert.equal(tree.getTreeItem(output).description, "port");
   assert.equal(tree.getParent(output), battery);
   const open = tree.getTreeItem(output).command!;
   await vscode.commands.executeCommand(open.command, ...open.arguments!);
@@ -149,6 +152,26 @@ export async function run(): Promise<void> {
     a.uri.toString(),
     "Browsing must not switch the selected project",
   );
+
+  const settings = vscode.workspace.getConfiguration("dryas");
+  assert.equal(settings.get("projectTree.displayMode"), "compact");
+  const generations = state
+    .getLanguageServiceStatus()
+    .map((entry) => (entry as { generation?: number }).generation);
+  await settings.update("projectTree.displayMode", "detailed", vscode.ConfigurationTarget.Global);
+  await vscode.commands.executeCommand("systrace.projectsDetailed.focus");
+  await eventually(
+    async () => tree.detailedView.getState(),
+    (view) => view.visible && view.ready && view.items > 0,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  assert.deepEqual(
+    state.getLanguageServiceStatus().map((entry) => (entry as { generation?: number }).generation),
+    generations,
+    "Display preferences must not restart language services",
+  );
+  await settings.update("projectTree.displayMode", "compact", vscode.ConfigurationTarget.Global);
+  await vscode.commands.executeCommand("systrace.projects.focus");
 
   const bUri = vscode.Uri.joinPath(b.uri, "system.sysml");
   await eventually(

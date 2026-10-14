@@ -41,7 +41,11 @@ export {
   assertLanguageEngineProvider,
   createLanguageBackend,
 } from "./provider.js";
-export { type LanguageServiceBackend, type LibraryDocumentProtocol } from "./language-service.js";
+export {
+  type LanguageServiceBackend,
+  type LibraryDocumentProtocol,
+  type OutlinePresentation,
+} from "./language-service.js";
 export type { QueryAnswer, TypeInfo, DeclaredSpecialization } from "./queries.js";
 export { DEFAULT_LANGUAGE_ENGINE_PROVIDER } from "./default-engine.js";
 

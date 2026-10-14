@@ -2,6 +2,7 @@
 import type { LanguageServiceBackend } from "../../language-service.js";
 import { readLibraryCatalog } from "./library-catalog.js";
 import { engineEnvironment } from "./connection.js";
+import { outlinePresentation } from "./outline-presentation.js";
 
 /** OpenSysML-specific LSP switches and bundled-source extension. */
 export const OPEN_SYSML_LANGUAGE_SERVICE: LanguageServiceBackend = {
@@ -16,6 +17,7 @@ export const OPEN_SYSML_LANGUAGE_SERVICE: LanguageServiceBackend = {
     args: ["-strict", "-no-record-cache"],
     environment: engineEnvironment,
   },
+  outlinePresentation,
   standardLibrary: {
     scheme: "sysml-stdlib",
     catalog: readLibraryCatalog,
