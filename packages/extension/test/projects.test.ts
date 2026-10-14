@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { access, mkdtemp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, rm, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { ExtensionContext, WorkspaceFolder } from "vscode";
@@ -173,7 +173,8 @@ beforeEach(async () => {
   host.warning.mockClear();
   host.prepare.mockClear();
   host.state.clear();
-  root = await mkdtemp(join(tmpdir(), "systrace-project-ui-"));
+  // Match the canonical paths used by project registration, including Windows short temp paths.
+  root = await realpath(await mkdtemp(join(tmpdir(), "systrace-project-ui-")));
   projects = new Projects(
     {
       workspaceState: {
@@ -191,7 +192,10 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   projects.dispose();
-  if (dirname(root) !== resolve(tmpdir()) || !basename(root).startsWith("systrace-project-ui-"))
+  if (
+    dirname(root) !== resolve(await realpath(tmpdir())) ||
+    !basename(root).startsWith("systrace-project-ui-")
+  )
     throw new Error("Unexpected fixture root");
   await rm(root, { recursive: true, force: true });
 });

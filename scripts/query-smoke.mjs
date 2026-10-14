@@ -140,11 +140,9 @@ export async function querySmoke() {
     assert(first.nextCursor);
     const second = await call("find_element", { cursor: first.nextCursor, limit: 1 });
     assert.notEqual(first.items[0].id, second.items[0].id);
-    const badCursor = await client.callTool({
-      name: "library_lookup",
-      arguments: { cursor: first.nextCursor },
+    await assert.rejects(() => call("library_lookup", { cursor: first.nextCursor }), {
+      code: "STALE_CURSOR",
     });
-    assert(badCursor.isError);
     const alias = await describe("Controls::aliasUse");
     assert(alias.metadata.some((m) => m.keyword === "secure"));
     const body = await describe("Controls::bodyOnly");
