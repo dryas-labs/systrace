@@ -417,7 +417,7 @@ export class Manager {
       } catch (error) {
         await this.stopProject(key, "project-references");
         this.attempted.delete(key);
-        const details = publicError(error);
+        const details = startupError(error, "model-folders");
         this.setStatus(key, {
           project: folder.index + 1,
           name: folder.name,
