@@ -1,6 +1,6 @@
 {
   "name": "dryas-systrace",
-  "version": "0.1.6",
+  "version": "0.1.22",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
@@ -33,7 +33,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "22.20.5",
-    "@types/vscode": "1.96.0",
+    "@types/vscode": "1.105.0",
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",

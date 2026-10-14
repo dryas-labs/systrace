@@ -12,3 +12,6 @@ artifacts/
 *.local.json
 /config.js
 .engine-ci/
+
+# Packaged skill is generated from the canonical skill and command bundle.
+/packages/extension/skills/

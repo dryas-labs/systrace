@@ -4,9 +4,6 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer } from "../../mcp-server/src/server.js";
 import { OpenSysMLBackend } from "../src/backends/opensysml/backend.js";
 import { createLanguageBackend, type LanguageEngineProvider } from "../src/provider.js";
 import { ProjectSession } from "../src/project.js";
@@ -461,73 +458,5 @@ describe("backend integration boundaries", () => {
     expect(backend.closeCalls).toBe(1);
     expect(backend.connected).toBe(false);
     expect(backend.documents).toEqual([]);
-  });
-
-  it("keeps four MCP tool schemas and dispatches an alternate provider over an MCP connection", async () => {
-    const { options } = await project();
-    const backend = new AlternateBackend();
-    const provider = alternateProvider(backend);
-    const server = createServer(options, provider);
-    const client = new Client({ name: "contract-test-client", version: "1.test" });
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    try {
-      await server.server.connect(serverTransport);
-      await client.connect(clientTransport);
-      const listed = await client.listTools();
-      expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
-        "describe_element",
-        "find_element",
-        "library_lookup",
-        "validate",
-      ]);
-      const expectedFields: Record<string, string[]> = {
-        validate: ["cursor", "limit", "paths"],
-        find_element: [
-          "cursor",
-          "kind",
-          "limit",
-          "metadata",
-          "name",
-          "qualifiedName",
-          "scope",
-          "specializes",
-        ],
-        describe_element: ["includeInherited", "qualifiedName"],
-        library_lookup: ["cursor", "kind", "limit", "name", "namespace", "qualifiedName"],
-      };
-      for (const tool of listed.tools) {
-        expect(Object.keys(tool.inputSchema.properties ?? {}).sort()).toEqual(
-          expectedFields[tool.name],
-        );
-        expect(tool.annotations).toMatchObject({
-          readOnlyHint: true,
-          destructiveHint: false,
-          openWorldHint: false,
-        });
-        if (tool.name !== "describe_element") {
-          expect(tool.inputSchema.properties?.limit).toMatchObject({ minimum: 1, maximum: 500 });
-        } else {
-          expect(tool.inputSchema.required).toEqual(["qualifiedName"]);
-          expect(tool.inputSchema.properties?.includeInherited).toMatchObject({ type: "boolean" });
-        }
-      }
-      const calls = [
-        { name: "validate", arguments: {} },
-        { name: "find_element", arguments: { name: "NoMatches" } },
-        { name: "describe_element", arguments: { qualifiedName: "ProjectOne" } },
-        { name: "library_lookup", arguments: { namespace: "FixtureLibrary" } },
-      ];
-      for (const call of calls) {
-        const result = await client.callTool(call);
-        expect(result.isError).not.toBe(true);
-        expect(result.structuredContent).toMatchObject({ engine: identity });
-      }
-      expect(backend.documents).toHaveLength(1);
-      expect(backend.calls.map(({ method }) => method)).toEqual(["find", "describe", "library"]);
-    } finally {
-      await client.close();
-      await server.close();
-    }
-    expect(backend.connected).toBe(false);
   });
 });

@@ -1,0 +1,123 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+body {
+  margin: 0;
+  padding: 0 0 8px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background);
+  font: var(--vscode-font-size)/1.4 var(--vscode-font-family);
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+.entry {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+  min-height: 22px;
+  gap: 4px;
+}
+.entry:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.entry.selected {
+  background: var(--vscode-list-inactiveSelectionBackground);
+}
+.entry:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+.fold {
+  background: none;
+  border: 0;
+  width: 16px;
+  flex: 0 0 16px;
+  padding: 0;
+  align-self: stretch;
+  color: inherit;
+  display: grid;
+  place-items: center;
+}
+.fold svg {
+  width: 12px;
+  height: 12px;
+}
+.fold[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+}
+.icon {
+  flex: 0 0 16px;
+  display: flex;
+  align-items: center;
+  color: var(--vscode-symbolIcon-objectForeground);
+}
+.icon img {
+  width: 16px;
+  height: 16px;
+}
+.icon .icon-light {
+  display: none;
+}
+body.vscode-light .icon .icon-light,
+body.vscode-high-contrast-light .icon .icon-light {
+  display: block;
+}
+body.vscode-light .icon .icon-dark,
+body.vscode-high-contrast-light .icon .icon-dark {
+  display: none;
+}
+.caption {
+  min-width: 0;
+  padding: 2px 0;
+  flex: 1;
+}
+.name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entry[data-kind="element"] .caption {
+  padding: 5px 0;
+}
+.entry:not([data-kind="element"]) .caption {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.entry:not([data-kind="element"]) .detail {
+  flex: 0 1 auto;
+}
+.entry:focus .detail {
+  color: inherit;
+  opacity: 0.85;
+}
+#status {
+  padding: 0 10px;
+  color: var(--vscode-descriptionForeground);
+  overflow-wrap: anywhere;
+}
+#empty {
+  padding: 8px 16px;
+}
+#empty button {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 4px 8px;
+  margin: 8px 0;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+[hidden] {
+  display: none !important;
+}

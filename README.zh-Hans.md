@@ -3,9 +3,9 @@
 [English](README.md) | **简体中文**
 
 DRYAS Systrace 面向系统工程建模与工程数字主线。当前产品以 VS Code 扩展形式提供，
-同时适配 Cursor，通过 language engine（语言引擎）提供 SysML v2 编辑能力，并通过 MCP 服务连接外部 agent。
+同时适配 Cursor，通过 language engine（语言引擎）提供 SysML v2 编辑能力，并向 Agent 提供编辑器诊断观察和独立 LSP 诊断命令。
 
-当前开发版提供 LSP 接入和四个只读 MCP 工具：`validate`, `find_element`, `describe_element`, `library_lookup`。验证与项目查询使用已保存文件。目前未实现 view 渲染和内置 agent。这些工具不证明工程设计正确性或完整标准一致性。
+当前开发版提供 LSP 编辑、当前窗口的诊断观察和独立 LSP 诊断命令。保存工程校验仍是独立的模型 API 操作。目前未实现 view 渲染和内置 Agent。
 
 ## 开始开发
 
@@ -33,9 +33,9 @@ VSIX 输出在 `artifacts/`。在 VS Code 或 Cursor 中执行 **Extensions: Ins
 
 [config/engine.json](config/engine.json) 记录开发引擎的版本和源码提交。
 本版 VSIX 使用外部的 `sysml-lsp` 与 `sysml-grpc`，不包含引擎二进制或标准库。
-0.1.6 使用 `v0.9.2-dryas.5`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
+0.1.22 使用 `v0.9.2-dryas.6`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
 源文件名和完整的 `doc`。升级时需要同时更新 VSIX 和两个外部引擎程序；如果手动填写过
-`dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.5`。
+`dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.6`。
 安装所配置 language engine 需要的构建工具链后，可以运行：
 
 ```sh
@@ -48,8 +48,8 @@ node scripts/build-engine.mjs
 
 ## 项目使用
 
-打开一个可信项目文件夹，在 `model/` 中编写 `.sysml` 或 `.kerml`。
-可用 `dryas.modelRoots` 指定其他源码文件夹。插件提供补全、悬停、跨文件定义跳转和实时诊断。
+打开一个可信项目文件夹，在项目目录中编写 `.sysml` 或 `.kerml`。
+可用 **Configure Model Source Folders** 指定其他源码文件夹。插件提供补全、悬停、跨文件定义跳转和实时诊断。
 对 `ISQ::voltage`、`ScalarValues::Integer` 等标准库名称按 F12，会打开引擎内置的只读源码；
 可以继续在标准库中查看悬浮提示和跳转定义，无需另行下载标准库或复制到项目中。
 阅读说明使用普通悬浮；Ctrl 悬浮仍是编辑器原生的短源码预览，不保证显示整个 `doc`。
@@ -65,9 +65,8 @@ LSP 的模型符号补全保持启用，用户自己的语言专项设置优先�
 - `DRYAS: Restart Language Server`：重新加载引擎与项目配置。
 - `DRYAS: Show Language Service Status`：查看连接状态、启动原因、启动次数和失败类型。
 - `DRYAS: Validate Saved Project`：展示整个保存项目的诊断结果。
-- `DRYAS: Show MCP Configuration`：生成供外部 agent 使用的本地配置，保存在版本控制之外。
 
-LSP 可处理未保存内容；MCP 验证的是磁盘上的保存快照。诊断分页不会改变项目错误总数。
+LSP 可处理未保存内容；保存工程校验使用磁盘上的快照。诊断分页不会改变项目错误总数。
 当前引擎 API 未提供完整性证明，因此零错误的结果仍为 `incomplete`。
 
 状态栏的 **DRYAS: Connected** 只表示 LSP 已连接。当前维护版引擎没有索引完成通知，
@@ -82,26 +81,26 @@ LSP 可处理未保存内容；MCP 验证的是磁盘上的保存快照。诊断
 
 ## 开发检查
 
-| 命令                            | 内容                                                   |
-| ------------------------------- | ------------------------------------------------------ |
-| `npm run check`                 | 本机信息检查、格式、lint、类型、构建和适配层单元测试   |
-| `npm run test:engine`           | 真实 language engine 多文件验证及 MCP stdio 客户端测试 |
-| `npm run test:host`             | 隔离的 VS Code 扩展宿主测试                            |
-| `npm run test:host -- --cursor` | 使用 `config.js` 中指定的 Cursor，运行相同宿主测试     |
-| `npm run watch`                 | 持续构建开发代码                                       |
-| `npm run package:vsix`          | 构建并生成开发版 VSIX                                  |
+| 命令                            | 内容                                                 |
+| ------------------------------- | ---------------------------------------------------- |
+| `npm run check`                 | 本机信息检查、格式、lint、类型、构建和适配层单元测试 |
+| `npm run test:engine`           | 真实 language engine 多文件验证及保存模型查询测试    |
+| `npm run test:host`             | 隔离的 VS Code 扩展宿主测试                          |
+| `npm run test:host -- --cursor` | 使用 `config.js` 中指定的 Cursor，运行相同宿主测试   |
+| `npm run watch`                 | 持续构建开发代码                                     |
+| `npm run package:vsix`          | 构建并生成开发版 VSIX                                |
 
 宿主测试加 `--vsix` 时，会先把已打包的 VSIX 安装到隔离配置，再测试包内代码。
 例如 `npm run test:host -- --cursor --vsix`。
 
 测试日志、编辑器配置和构建产物保留在被忽略的本地目录，不进入源码提交。
-GitHub Actions 会在 PR 和推送到 `main` 时，在 Windows 与 Linux 上执行代码检查、单元测试、真实引擎/MCP 测试及已打包扩展的 VS Code 宿主测试。成功的任务提供 VSIX 下载，保留 14 天。Cursor 宿主测试仍在本地运行。
+GitHub Actions 会在 PR 和推送到 `main` 时，在 Windows 与 Linux 上执行代码检查、单元测试、真实引擎检查及已打包扩展的 VS Code 宿主测试。成功的任务提供 VSIX 下载，保留 14 天。Cursor 宿主测试仍在本地运行。
 
 ## 代码组织
 
 - `packages/extension`：编辑器插件和 LSP 客户端。
 - `packages/engine-adapter`：引擎进程、保存快照和验证结果。
-- `packages/mcp-server`：外部 agent 的只读工具入口。
+- `skills/sysml-diagnostics`：Agent 诊断观察的使用说明与命令入口。
 - [产品架构](docs/architecture.zh-Hans.md)：当前架构和边界。
 
 文档默认使用英文，每份使用指南顶部均提供英文和简体中文切换链接。
@@ -113,3 +112,145 @@ DRYAS 自有代码采用 [Apache License 2.0](LICENSE)。源码中的
 `SPDX-License-Identifier: Apache-2.0` 标记该文件的许可证。
 构建根据实际打包的 JavaScript 依赖生成 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
 并将许可证与声明放入 VSIX。外部 language engine 及其标准库的许可证与发布清单另行管理。
+
+## 项目管理
+
+左侧独立的 **Systrace** 入口中的 **Projects** 列出工作区的本地项目文件夹。
+通过 **New Systrace Project** 指定名称和父目录来新建项目，或用 **Open Systrace Project**
+加入已有文件夹。每个文件夹就是项目 root。点击项目会将它设为保存校验的默认目标；
+切换编辑器标签不会改变这个选择。其他项目仍可编辑。关闭项目只移除工作区条目并停止插件的相关服务，
+不删除文件，也不影响独立启动的诊断命令。保存 VS Code 工作区后可以重新打开项目列表。
+
+模型可放在项目根目录或子目录中。用 **Configure Model Source Folders** 将源码范围
+保存在 `.systrace/project.json`。没有该文件的已有项目沿用 `dryas.modelRoots`，默认 `["."]`；
+旧的显式配置如 `["model"]` 在创建共享项目配置前仍然有效。隐藏目录和 `node_modules` 与语言服务一样被排除；
+`designs` 等普通目录可以包含模型。生成的模型文件应放在所配置的源码目录之外。
+本版不提供自定义 glob 排除规则。
+
+项目根目录必须互不嵌套，避免两个语言服务同时处理同一份源码。已有工作区包含重叠根目录时会明确报错，
+不会把它们悄悄合并成一个模型。同时打开多个项目不会建立依赖；通过 Add Project Reference 显式添加引用。
+
+可用 `npm run test:host -- --projects --vsix` 运行隔离的双项目检查；
+再加 `--cursor` 可在已配置的 Cursor 安装中执行相同检查。
+
+## 项目树
+
+点击左侧活动栏的 **Systrace** 图标，进入独立的项目侧栏。它与原生资源管理器分开。
+默认源码范围下，文件和子目录直接显示在项目名称下面；单独配置的源码目录显示实际相对路径。
+只读的 **Standard Library** 保持独立节点。
+源码按目录和 `.sysml` / `.kerml` 文件组织；继续展开文件可浏览语言引擎返回的声明层级，
+点击元素定位源码。元素层级随未保存的编辑刷新，文件增删会更新目录；顶部可手动刷新。
+
+标准库目录按需从引擎取得，只列出当前项目上下文中引擎可见的库命名空间。
+展开库节点可浏览声明并打开只读源码。命名覆盖可能影响可见目录；导入和重新导出的成员不会
+作为声明重复展开。模型类型标签只显示引擎提供的信息，不根据源码文本猜测类型。
+浏览其他项目或标准库不会重新绑定已有的 Agent 会话。
+
+右键项目或源码目录，选择 **New Namespace…**，或使用项目视图顶部的同名操作。
+输入名称后创建并打开同名 `.sysml` 文件，内容为对应的具名 `package`。项目配置多个源码目录时，
+先选择创建位置。当前项目的 LSP 先检查不带引号的声明，必要时再检查单引号写法。
+只有收到无错误的诊断，并且声明树中的包名与输入一致，才会创建文件。扩展不另设保留字表或
+标识符正则来决定写法。临时缓冲区在检查后关闭；引擎不可用、请求失败或超时时不创建文件。
+已有文件不会被覆盖。
+文件名和包名后续可以分别修改。从其他项目的右键菜单创建时，不会改变当前项目。
+
+当前语言服务会以转义形式返回名称内的单引号，这类名称暂时不能通过创建检查。
+操作会提示无法确认名称，并保持项目文件不变。
+
+删除命名空间文件时，右键对应的 `.sysml` 文件节点，选择 **Delete Namespace…**。
+确认框会显示所属项目和相对文件路径；只有再次选择 **Delete** 才会执行。
+取消或关闭确认框会保留文件。操作通过编辑器删除整个文件及其中全部声明，随后刷新项目树。
+模型元素、文件夹、KerML 文件和只读标准库节点不提供此操作。
+
+## 项目引用
+
+右键使用依赖的项目，选择 **Add Project Reference…**。可以选择已打开的项目，也可以选择
+**Browse for Project Folder…** 浏览外部项目文件夹。没有其他已打开项目时，直接显示文件夹选择框。
+引用外部项目不会将其加入工作区，也不会改变当前项目。已经直接引用的项目不再出现在候选列表中；
+通过文件夹选择再次选中同一项目时，会提示已有引用。
+**Project References** 展示直接及间接引用。引用文件在使用方的语言上下文中只读打开；
+需要修改时使用 **Open Referenced Project** 进入所属项目。**Remove Project Reference** 只移除引用关系，
+不删除被引用项目的文件。关闭被引用项目的工作区条目后，使用方仍可加载其模型。
+
+源码范围和引用关系使用相对路径保存在 `.systrace/project.json`。新项目会创建该文件。
+添加引用时，已打开的项目会用当前源码范围初始化缺失的配置。外部文件夹保持原样：
+存在项目配置时按其源码范围加载，没有配置时默认使用整个文件夹。
+**Configure Model Source Folders** 也写入该文件。该配置优先于旧的 `dryas.modelRoots` 设置及
+保存模型调用方提供的回退范围；引擎程序路径仍留在本机编辑器配置中。
+
+```json
+{
+  "version": 1,
+  "modelRoots": ["."],
+  "references": ["../SharedComponents"]
+}
+```
+
+LSP、保存校验和保存模型查询使用相同的依赖范围。依赖以已保存内容为准，未保存的修改留在所属项目的
+编辑会话中；依赖保存后更新使用方分析和只读标签页。修改引用关系或源码范围时，相关语言服务重新连接，
+旧的依赖标签页关闭。保存模型会话在每次请求时读取更新后的项目配置。
+
+项目引用使源码可用，SysML 的 `import` 仍负责命名空间导入。名称解析和模型冲突由语言引擎判断。
+缺失目录、项目根目录重叠和项目引用环会报配置错误。本版拒绝项目引用环是加载策略，不是额外的 SysML
+语言规则。相对引用要求项目位于同一磁盘。保存校验中的依赖文件使用 `.references/<id>/…` 标识，
+`content.references` 给出 ID 与项目的对应关系。
+
+删除依赖源码文件也会重连使用它的项目，清除缓存声明；普通保存修改通过文件更新生效，不重启语言服务。
+
+## 项目树显示
+
+在用户设置中选择 **DRYAS › Project Tree: Display Mode**，对所有项目统一生效。
+默认 **Compact — one line（单行紧凑）** 使用编辑器原生树，在一行中显示元素名称、显式类型和声明类别。
+**Detailed — two lines（双行清晰）** 使用自定义侧栏，名称在第一行，类别和类型在第二行。
+两种视图共用项目数据和操作。切换不会重连语言引擎，也不会改变项目范围。
+两种视图分别保存展开状态。
+
+声明类别、引用修饰符和显式类型来自语言引擎的大纲接口，Systrace 不自行解析模型文字来补标签。
+本版需要引擎 `v0.9.2-dryas.6` 提供这些大纲信息；没有展示信息的符号保留通用图标。
+
+两种显示方式共用图标和分类映射。Definition 在类别基础图形左侧增加一条固定长度、固定间距的直竖线；
+Usage 使用相同的基础图形，不加竖线。琥珀色和蓝色辅助区分两者。包、注释、文档说明、别名分别使用中性色图标。
+元数据使用 `@` 图形，多重性使用方括号，不使用 `#`。`ref part` 保留 part 图标和原始 `ref part`
+标签。KerML 的类型与特征采用对应的视觉家族，文字仍保留原始类别名称。这些图标是 Systrace 的界面约定。
+
+显示只反映引擎实际提供的区别。未知类别使用问号图标并保留原始标签；例如仅凭 `enum` 标签，
+无法区分枚举字面量与枚举用法。
+
+## Agent 诊断观察
+
+Copilot 可使用 **Systrace: Current Window Problems**（`#systraceProblems`，工具名
+`dryas_editor_diagnostics`）。它读取当前窗口已有的 SysML/KerML 问题集合，返回
+`observation: "editor"`，包含所有严重度、未保存文档及库文件标记。每个项目附带现有连接状态和
+`index: "unconfirmed"`。语言服务断开时仍返回现有集合，本次读取不因此失败。空列表不表示检查完整。
+工具不会保存文件、触发重算或连接其他窗口。
+
+需要独立观察时，构建仓库后运行：
+
+```sh
+npm exec -- dryas-lsp-diagnostics --project <项目文件夹>
+```
+
+安装后的扩展在 `dist/lsp-diagnostics.cjs` 中包含独立命令。配套的完整 Skill 位于
+`skills/sysml-diagnostics`，可将整个目录复制到目标 Agent 支持的 Skill 目录。
+其中的 `scripts/diagnostics.cjs` 可通过 Node.js 执行，不依赖 VS Code 或产品源码仓库。
+
+命令返回 `observation: "lsp-recompute"`，加载当前项目及其引用项目配置范围内的所有已保存
+SysML/KerML 文件，使用语言服务描述中的启动参数并先检查版本。`--lsp` 默认使用 PATH 中的
+`sysml-lsp`；`--expected-version` 默认使用当前选定构建。不读取用户级设置或其中的机器路径。
+源码目录优先级为显式 `--model-root`、`.systrace/project.json`、项目自己的
+`.vscode/settings.json` 中的 `dryas.modelRoots`，最后默认 `["."]`。
+显式目录只覆盖当前项目，引用项目仍使用各自的配置范围。
+
+`--path <相对路径>` 只筛选打印的诊断，不缩小加载范围。`--path` 和 `--model-root` 均可重复传入。
+`--overlay <相对文件>` 从标准输入读取 UTF-8 文本，仅在本次 LSP 会话中替换当前项目范围内一个已有文件，
+不写磁盘，不支持替换引用项目或标准库文件。
+
+全部文件打开后，每个文件至少收到一次诊断通知（空数组也算），且连续 500 毫秒没有新诊断时，
+返回 `settled: true`。这只表示观测暂时稳定，不是索引完成证明；`index` 始终为 `unconfirmed`。
+`--timeout-ms` 默认 30000。初始化成功后到达时限，返回已收到的诊断和 `settled: false`，退出码为 0。
+没有模型文件时也返回未稳定的观察。模型中存在错误不改变退出码；参数错误、版本或握手失败、进程异常
+或协议损坏时退出码为 1，只给一条经过处理的错误说明。
+
+两条观察均使用 1 起始的行和 UTF-16 字符列。**Validate Saved Project** 仍独立调用模型 API
+检查保存工程，保留其 1 起始 UTF-8 字节列，不能混用。空诊断和 `settled: false` 都不是完整检查的证明。
+编辑器结果中的 `documentVersion` 仅表示当前缓冲区版本，不声称缓存诊断对应这个版本。

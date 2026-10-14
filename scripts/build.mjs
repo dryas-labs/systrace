@@ -4,15 +4,23 @@ import { mkdir, copyFile, readFile, writeFile, readdir } from "node:fs/promises"
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeDebugEnvironment } from "./config.mjs";
+import { generateProjectIcons } from "./generate-project-icons.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 await writeDebugEnvironment();
+await generateProjectIcons();
 const jobs = [
   ["packages/engine-adapter/src/index.ts", "packages/engine-adapter/dist/index.js", "esm"],
-  ["packages/mcp-server/src/server.ts", "packages/mcp-server/dist/server.js", "esm"],
-  ["packages/mcp-server/src/cli.ts", "packages/mcp-server/dist/cli.cjs", "cjs"],
+  [
+    "packages/engine-adapter/src/lsp-diagnostics-cli.ts",
+    "packages/engine-adapter/dist/lsp-diagnostics.cjs",
+    "cjs",
+  ],
   ["packages/extension/src/extension.ts", "packages/extension/dist/extension.cjs", "cjs"],
+  ["test/host/diagnostics.ts", "test/host/dist/diagnostics.cjs", "cjs"],
   ["test/host/index.ts", "test/host/dist/index.cjs", "cjs"],
+  ["test/host/projects.ts", "test/host/dist/projects.cjs", "cjs"],
+  ["test/host/references.ts", "test/host/dist/references.cjs", "cjs"],
 ];
 const common = {
   absWorkingDir: root,
@@ -22,21 +30,27 @@ const common = {
   external: ["vscode"],
   sourcemap: true,
   metafile: true,
-  alias: { "@dryas/engine-adapter": resolve(root, "packages/engine-adapter/src/index.ts") },
+  alias: {
+    "@dryas/engine-adapter": resolve(root, "packages/engine-adapter/src/index.ts"),
+    "jsonc-parser": resolve(root, "node_modules/jsonc-parser/lib/esm/main.js"),
+  },
   logLevel: "warning",
 };
 const watch = process.argv.includes("--watch");
 const results = [];
 for (const [entry, outfile, format] of jobs) {
-  const plugins = entry.endsWith("/cli.ts")
+  const plugins = entry.endsWith("/lsp-diagnostics-cli.ts")
     ? [
         {
-          name: "sync-mcp-bundle",
+          name: "sync-diagnostics-bundle",
           setup(builder) {
             builder.onEnd(async (result) => {
               if (!result.errors.length) {
                 await mkdir(join(root, "packages/extension/dist"), { recursive: true });
-                await copyFile(join(root, outfile), join(root, "packages/extension/dist/mcp.cjs"));
+                await copyFile(
+                  join(root, outfile),
+                  join(root, "packages/extension/dist/lsp-diagnostics.cjs"),
+                );
               }
             });
           },
@@ -64,13 +78,21 @@ for (const [entry, outfile, format] of jobs) {
   }
 }
 await copyFile(
-  join(root, "packages/mcp-server/dist/cli.cjs"),
-  join(root, "packages/extension/dist/mcp.cjs"),
+  join(root, "packages/engine-adapter/dist/lsp-diagnostics.cjs"),
+  join(root, "packages/extension/dist/lsp-diagnostics.cjs"),
 );
 await copyFile(join(root, "LICENSE"), join(root, "packages/extension/LICENSE"));
+const skill = join(root, "packages/extension/skills/sysml-diagnostics");
+await mkdir(join(skill, "scripts"), { recursive: true });
+await copyFile(join(root, "skills/sysml-diagnostics/SKILL.md"), join(skill, "SKILL.md"));
+await copyFile(
+  join(root, "packages/engine-adapter/dist/lsp-diagnostics.cjs"),
+  join(skill, "scripts/diagnostics.cjs"),
+);
+await copyFile(join(root, "LICENSE"), join(skill, "LICENSE"));
 
 const packages = new Set();
-for (const result of results.slice(0, -1))
+for (const result of results.filter((_result, index) => jobs[index][0].startsWith("packages/")))
   for (const input of Object.keys(result.metafile.inputs)) {
     const parts = input.split("/");
     const offset = parts.lastIndexOf("node_modules");
@@ -79,7 +101,7 @@ for (const result of results.slice(0, -1))
     packages.add(parts.slice(0, end).join("/"));
   }
 let notices =
-  "# Third-party notices\n\nGenerated from dependencies included in the extension and MCP bundles.\nThe language engine is configured as an external executable and is not included in this VSIX.\n\n";
+  "# Third-party notices\n\nGenerated from dependencies included in the extension and command bundles.\nThe language engine is configured as an external executable and is not included in this VSIX.\n\n";
 const seen = new Map();
 for (const path of [...packages].sort()) {
   const folder = join(root, path);
@@ -105,6 +127,7 @@ await copyFile(
   join(root, "THIRD_PARTY_NOTICES.md"),
   join(root, "packages/extension/THIRD_PARTY_NOTICES.md"),
 );
+await copyFile(join(root, "THIRD_PARTY_NOTICES.md"), join(skill, "THIRD_PARTY_NOTICES.md"));
 await mkdir(join(root, "artifacts"), { recursive: true });
 await writeFile(
   join(root, "artifacts/build-meta.json"),
@@ -117,5 +140,5 @@ await writeFile(
 console.log(
   watch
     ? "DRYAS builds ready; watching source files."
-    : "Built adapter, MCP server, extension and host tests; refreshed bundled notices.",
+    : "Built adapter, LSP diagnostics command, extension and host tests; refreshed bundled notices.",
 );

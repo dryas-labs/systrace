@@ -135,8 +135,8 @@ describe("saved-project validation", () => {
     const { root } = await project();
     await expect(readSnapshot(root, ["../"])).rejects.toMatchObject({ code: "INVALID_PATH" });
     await mkdir(join(root, "empty"));
-    await mkdir(join(root, "selection"));
-    await expect(readSnapshot(root, ["selection"])).rejects.toMatchObject({ code: "INVALID_PATH" });
+    await mkdir(join(root, ".private"));
+    await expect(readSnapshot(root, [".private"])).rejects.toMatchObject({ code: "INVALID_PATH" });
     await expect(readSnapshot(root, ["empty"])).rejects.toMatchObject({ code: "EMPTY_PROJECT" });
     expect((await readSnapshot(root, ["model", "model"])).documents).toHaveLength(2);
   });
@@ -199,4 +199,28 @@ describe("saved-project validation", () => {
       engine.close();
     }
   });
+});
+
+it("loads root-level models and ordinary nested folders while excluding editor and dependency folders", async () => {
+  const { root, session } = await project();
+  await writeFile(join(root, "root.sysml"), "package RootLevel;");
+  for (const name of ["designs", "selection", ".cache", "node_modules"]) {
+    await mkdir(join(root, name));
+    await writeFile(
+      join(root, name, "sample.sysml"),
+      `package ${name === ".cache" ? "Cache" : name};`,
+    );
+  }
+  const result = await session.validate();
+  expect(result.content.files.map((file) => file.file)).toEqual([
+    "designs/sample.sysml",
+    "model/definitions.sysml",
+    "model/system.sysml",
+    "root.sysml",
+    "selection/sample.sysml",
+  ]);
+  expect((await readSnapshot(root, ["model"])).documents.map((doc) => doc.name)).toEqual([
+    "model/definitions.sysml",
+    "model/system.sysml",
+  ]);
 });

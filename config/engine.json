@@ -1,9 +1,9 @@
 {
   "engine": "OpenSysML",
-  "version": "v0.9.2-dryas.5",
+  "version": "v0.9.2-dryas.6",
   "source": "https://github.com/dryas-labs/OpenSysML",
-  "branch": "main",
-  "commit": "e2e934bd4ce40bc6a33fc4103baf0b935db9da57",
+  "branch": "feat/outline-presentation",
+  "commit": "ac571605476836fe339f6f26807798e44ad12859",
   "base": "v0.9.2",
   "distribution": "external executables; not bundled in this development VSIX"
 }

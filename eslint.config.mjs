@@ -9,6 +9,7 @@ export default [
       "designs/**",
       "**/node_modules/**",
       "**/dist/**",
+      "packages/extension/skills/**",
       "artifacts/**",
       ".tmp/**",
       ".vscode-test/**",
@@ -18,6 +19,13 @@ export default [
     ],
   },
   ...tseslint.configs.recommended,
+  {
+    files: ["packages/extension/media/*.js"],
+    languageOptions: {
+      globals: { document: "readonly", window: "readonly", acquireVsCodeApi: "readonly" },
+    },
+    rules: { ...js.configs.recommended.rules },
+  },
   {
     files: ["**/*.ts"],
     rules: {

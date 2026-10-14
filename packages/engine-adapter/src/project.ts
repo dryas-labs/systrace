@@ -13,7 +13,8 @@ import {
 } from "./backend.js";
 import { createLanguageBackend } from "./provider.js";
 import { DEFAULT_LANGUAGE_ENGINE_PROVIDER } from "./default-engine.js";
-import { readSnapshot, relativeName, sameSnapshot, type Snapshot } from "./snapshot.js";
+import { relativeName, sameSnapshot, type Snapshot } from "./snapshot.js";
+import { readProjectSnapshot as readSnapshot, type ReferenceSummary } from "./project-graph.js";
 import {
   parseInput,
   findInputSchema,
@@ -60,6 +61,7 @@ export interface ValidationResult {
     sessionId: string;
     projectRevision: number;
     files: { file: string; revision: number }[];
+    references?: ReferenceSummary[];
   };
   project: Counts;
   scope: Counts & { paths: string[] };
@@ -199,7 +201,7 @@ export class ProjectSession {
     const previous = this.cache;
     const before = await readSnapshot(
       this.options.projectRoot,
-      this.options.modelRoots ?? ["model"],
+      this.options.modelRoots ?? ["."],
       signal,
     );
     let offset = 0,
@@ -255,6 +257,7 @@ export class ProjectSession {
       content: {
         sessionId: this.sessionId,
         projectRevision: this.revision,
+        ...(cached.snapshot.references?.length ? { references: cached.snapshot.references } : {}),
         files: cached.snapshot.documents.map((d) => ({
           file: d.name,
           revision: this.versions.get(d.name)!,
@@ -284,7 +287,7 @@ export class ProjectSession {
         throw new AdapterError("STALE_MODEL", "The engine changed while validating the project.");
       const after = await readSnapshot(
         this.options.projectRoot,
-        this.options.modelRoots ?? ["model"],
+        this.options.modelRoots ?? ["."],
         signal,
       );
       if (!sameSnapshot(before, after))
@@ -356,7 +359,7 @@ export class ProjectSession {
     const fingerprint = JSON.stringify(filters);
     const before = library
       ? null
-      : await readSnapshot(this.options.projectRoot, this.options.modelRoots ?? ["model"], signal);
+      : await readSnapshot(this.options.projectRoot, this.options.modelRoots ?? ["."], signal);
     let page: QueryPage;
     if (cursor) {
       const stored = this.queryPages.get(cursor);
@@ -411,7 +414,7 @@ export class ProjectSession {
     if (!library) {
       const after = await readSnapshot(
         this.options.projectRoot,
-        this.options.modelRoots ?? ["model"],
+        this.options.modelRoots ?? ["."],
         signal,
       );
       if (!before || !sameSnapshot(before, after))
