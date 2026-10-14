@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -85,10 +85,6 @@
         "title": "DRYAS: Validate Saved Project"
       },
       {
-        "command": "dryas.showMcpConfiguration",
-        "title": "DRYAS: Show MCP Configuration"
-      },
-      {
         "command": "dryas.createProject",
         "title": "DRYAS: New Systrace Project",
         "icon": "$(new-folder)"
@@ -162,10 +158,6 @@
         "title": "DRYAS: Validate Saved Project"
       },
       {
-        "command": "dryas.detailed.showMcpConfiguration",
-        "title": "DRYAS: Show MCP Configuration"
-      },
-      {
         "command": "dryas.detailed.configureModelRoots",
         "title": "DRYAS: Configure Model Source Folders"
       },
@@ -188,14 +180,6 @@
       {
         "command": "dryas.detailed.openReferencedProject",
         "title": "DRYAS: Open Referenced Project"
-      },
-      {
-        "command": "dryas.manageMcpServers",
-        "title": "DRYAS: Manage Workspace MCP Servers"
-      },
-      {
-        "command": "dryas.detailed.manageMcpServers",
-        "title": "DRYAS: Manage Workspace MCP Servers"
       }
     ],
     "configuration": {
@@ -222,7 +206,7 @@
             "."
           ],
           "scope": "resource",
-          "description": "Fallback source folders for projects without .systrace/project.json. Use Configure Model Source Folders to save a project scope shared with referenced projects and MCP."
+          "description": "Fallback source folders for projects without .systrace/project.json. Use Configure Model Source Folders to save a shared project scope."
         },
         "dryas.expectedEngineVersion": {
           "type": "string",
@@ -300,11 +284,6 @@
           "command": "dryas.refreshProjects",
           "when": "view == systrace.projects || view == systrace.projectsDetailed",
           "group": "navigation"
-        },
-        {
-          "command": "dryas.manageMcpServers",
-          "when": "view == systrace.projects || view == systrace.projectsDetailed",
-          "group": "2_tools"
         }
       ],
       "view/item/context": [
@@ -320,11 +299,6 @@
         },
         {
           "command": "dryas.validateProject",
-          "when": "view == systrace.projects && viewItem == systraceProject",
-          "group": "2_tools"
-        },
-        {
-          "command": "dryas.showMcpConfiguration",
           "when": "view == systrace.projects && viewItem == systraceProject",
           "group": "2_tools"
         },
@@ -357,11 +331,6 @@
           "command": "dryas.openReferencedProject",
           "when": "view == systrace.projects && (viewItem == systraceProjectReference || viewItem == systraceTransitiveReference)",
           "group": "1_references"
-        },
-        {
-          "command": "dryas.manageMcpServers",
-          "when": "view == systrace.projects && viewItem == systraceProject",
-          "group": "2_tools"
         }
       ],
       "explorer/context": [
@@ -401,10 +370,6 @@
           "when": "false"
         },
         {
-          "command": "dryas.detailed.showMcpConfiguration",
-          "when": "false"
-        },
-        {
           "command": "dryas.detailed.configureModelRoots",
           "when": "false"
         },
@@ -427,10 +392,6 @@
         {
           "command": "dryas.detailed.openReferencedProject",
           "when": "false"
-        },
-        {
-          "command": "dryas.detailed.manageMcpServers",
-          "when": "false"
         }
       ],
       "webview/context": [
@@ -446,11 +407,6 @@
         },
         {
           "command": "dryas.detailed.validateProject",
-          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
-          "group": "systrace"
-        },
-        {
-          "command": "dryas.detailed.showMcpConfiguration",
           "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
           "group": "systrace"
         },
@@ -483,11 +439,6 @@
           "command": "dryas.detailed.openReferencedProject",
           "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProjectReference || webviewSection == systraceTransitiveReference)",
           "group": "systrace"
-        },
-        {
-          "command": "dryas.detailed.manageMcpServers",
-          "when": "webviewId == systrace.projectsDetailed && (webviewSection == systraceProject)",
-          "group": "systrace"
         }
       ]
     },
@@ -500,10 +451,19 @@
         }
       ]
     },
-    "mcpServerDefinitionProviders": [
+    "languageModelTools": [
       {
-        "id": "systrace.workspace",
-        "label": "Systrace Workspace Projects"
+        "name": "dryas_editor_diagnostics",
+        "displayName": "Systrace: Current Window Problems",
+        "toolReferenceName": "systraceProblems",
+        "canBeReferencedInPrompt": true,
+        "modelDescription": "Read current-window SysML/KerML Problems, including all severities, unsaved documents and library diagnostics. Returns observation editor and each project language-service connection state with index unconfirmed. Reads existing diagnostics even when disconnected. Does not run validation, save documents or connect to another window. An empty list is only an empty Problems snapshot, not evidence of complete checking.",
+        "userDescription": "Read SysML/KerML diagnostics already present in this window, without saving or rechecking files.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
       }
     ]
   },

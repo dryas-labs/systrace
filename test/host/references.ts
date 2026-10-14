@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
 import assert from "node:assert/strict";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { ProjectSession } from "@dryas/engine-adapter";
 import type { Projects } from "../../packages/extension/src/projects.js";
 import type { ContentNode, ProjectNode } from "../../packages/extension/src/project-tree.js";
 
@@ -95,15 +94,11 @@ export async function run(): Promise<void> {
   assert.equal(tree.getTreeItem(file).contextValue, "systraceReadOnlyReference");
   assert((await children(file)).some((node) => node.label === "Components"));
 
-  await vscode.commands.executeCommand("dryas.showMcpConfiguration");
-  const config = JSON.parse(vscode.window.activeTextEditor!.document.getText()).mcpServers.dryas;
-  const client = new Client({ name: "systrace-reference-host-check", version: "1.0.0" });
-  const transport = new StdioClientTransport({
-    command: config.command,
-    args: config.args,
-    stderr: "pipe",
+  const settings = vscode.workspace.getConfiguration("dryas", a.uri);
+  const session = new ProjectSession({
+    projectRoot: a.uri.fsPath,
+    engine: { executable: settings.get<string>("apiPath")! },
   });
-  transport.stderr?.on("data", () => {});
   type Report = {
     project: { errors: number };
     content: {
@@ -114,12 +109,14 @@ export async function run(): Promise<void> {
   };
   type Found = { items: { qualifiedName: string }[] };
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
-    const answer = await client.callTool({ name, arguments: args });
-    assert(!answer.isError, `MCP ${name} failed: ${JSON.stringify(answer.content)}`);
-    return answer.structuredContent as T;
+    const methods: Record<string, () => Promise<unknown>> = {
+      validate: () => session.validate(args),
+      find_element: () => session.findElement(args),
+      describe_element: () => session.describeElement(args as { qualifiedName: string }),
+    };
+    return (await methods[name]!()) as T;
   };
   try {
-    await client.connect(transport);
     const before = await call<Report>("validate");
     assert.equal(before.project.errors, 0);
     assert.deepEqual(before.content.references?.map((ref) => ref.project).sort(), [
@@ -249,9 +246,9 @@ export async function run(): Promise<void> {
     await eventually("external folder completion", completion, (items) => has(items, "Battery"));
     assert.equal((await call<Report>("validate")).project.errors, 0);
   } finally {
-    await client.close();
+    session.close();
   }
   console.log(
-    "DRYAS host checks passed: declared, external-folder and transitive project references, native completion and definition, read-only dependency tree, saved-only isolation, saved updates with dependency open and closed, MCP validation/find/describe and scope refresh, dependency error locations and deletion/restoration, reference removal without deleting files.",
+    "DRYAS host checks passed: declared, external-folder and transitive project references, native completion and definition, read-only dependency tree, saved-only isolation, saved updates with dependency open and closed, saved validation/find/describe and scope refresh, dependency error locations and deletion/restoration, reference removal without deleting files.",
   );
 }

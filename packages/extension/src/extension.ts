@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { join, relative, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
-import { WorkspaceMcp, mcpArguments } from "./workspace-mcp.js";
+import { observeEditorDiagnostics } from "./editor-diagnostics.js";
 import { Projects, overlappingRoots } from "./projects.js";
 import {
   LanguageClient,
@@ -113,7 +113,6 @@ export class Manager {
   );
   private disposed = false;
   private readonly projectUi: Projects;
-  readonly workspaceMcp: WorkspaceMcp;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -179,7 +178,15 @@ export class Manager {
       },
       () => this.refresh("configuration"),
     );
-    this.workspaceMcp = new WorkspaceMcp(context, (folder) => options(folder, this.provider));
+    if (typeof vscode.lm?.registerTool === "function")
+      context.subscriptions.push(
+        vscode.lm.registerTool("dryas_editor_diagnostics", {
+          invoke: () =>
+            new vscode.LanguageModelToolResult([
+              new vscode.LanguageModelTextPart(JSON.stringify(this.observeEditorDiagnostics())),
+            ]),
+        }),
+      );
     this.statusBar.name = "DRYAS language service";
     this.statusBar.command = "dryas.showLanguageServiceStatus";
     context.subscriptions.push(
@@ -214,10 +221,6 @@ export class Manager {
         "dryas.configureModelRoots",
         (folder?: vscode.WorkspaceFolder) => this.configureModelRoots(folder),
       ),
-      vscode.commands.registerCommand(
-        "dryas.showMcpConfiguration",
-        (folder?: vscode.WorkspaceFolder) => this.showMcpConfiguration(folder),
-      ),
     );
   }
 
@@ -227,6 +230,13 @@ export class Manager {
 
   getProjectTree(): Projects {
     return this.projectUi;
+  }
+
+  observeEditorDiagnostics() {
+    return observeEditorDiagnostics(
+      this.getStatus(),
+      new Set([...this.libraries.values()].map((library) => library.scheme)),
+    );
   }
 
   private runningProject(folder: vscode.WorkspaceFolder): RunningProject {
@@ -902,21 +912,6 @@ export class Manager {
     }
   }
 
-  private async showMcpConfiguration(requested?: vscode.WorkspaceFolder): Promise<void> {
-    const folder = await this.chooseFolder(requested);
-    if (!folder) return;
-    const config = options(folder, this.provider);
-    config.modelRoots = (
-      await readProjectDefinition(folder.uri.fsPath, config.modelRoots)
-    ).modelRoots;
-    const args = mcpArguments(this.context.extensionPath, config);
-    const document = await vscode.workspace.openTextDocument({
-      language: "json",
-      content: JSON.stringify({ mcpServers: { dryas: { command: "node", args } } }, null, 2),
-    });
-    await vscode.window.showTextDocument(document, { preview: true });
-  }
-
   private async stopProject(key: string, reason: string): Promise<void> {
     this.libraries.get(key)?.detach();
     const running = this.projects.get(key);
@@ -944,7 +939,6 @@ export class Manager {
 
   async dispose(): Promise<void> {
     this.disposed = true;
-    this.workspaceMcp.dispose();
     this.projectUi.dispose();
     await this.refreshQueue.dispose();
     await Promise.all(
@@ -957,12 +951,10 @@ export class Manager {
   }
 }
 
-export async function activate(
-  context: vscode.ExtensionContext,
-): Promise<{
+export async function activate(context: vscode.ExtensionContext): Promise<{
   getLanguageServiceStatus: () => ServiceStatus[];
   getProjectTree: () => Projects;
-  getWorkspaceMcp: () => WorkspaceMcp;
+  getEditorDiagnostics: () => ReturnType<typeof observeEditorDiagnostics>;
 }> {
   manager = new Manager(context);
   await manager.refresh("activation");
@@ -970,7 +962,7 @@ export async function activate(
   return {
     getLanguageServiceStatus: () => current.getStatus(),
     getProjectTree: () => current.getProjectTree(),
-    getWorkspaceMcp: () => current.workspaceMcp,
+    getEditorDiagnostics: () => current.observeEditorDiagnostics(),
   };
 }
 export async function deactivate(): Promise<void> {

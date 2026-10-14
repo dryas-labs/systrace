@@ -599,7 +599,7 @@ export class Projects implements vscode.TreeDataProvider<ProjectNode>, vscode.Di
         ?.uri.toString();
       await this.context.workspaceState.update("dryas.currentProject", this.selected);
     }
-    // Remove only the workspace entry. Files and external MCP processes are untouched.
+    // Remove only the workspace entry. Files and independent diagnostic commands are untouched.
     if (!vscode.workspace.updateWorkspaceFolders(resolved.index, 1))
       void vscode.window.showErrorMessage("The project could not be closed in this workspace.");
     this.refresh();

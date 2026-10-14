@@ -10,5 +10,6 @@
 !media/project-tree.js
 !media/tree-icons/**
 !dist/extension.cjs
-!dist/mcp.cjs
+!dist/lsp-diagnostics.cjs
+!skills/**
 **/*.map

@@ -9,6 +9,7 @@ export default [
       "designs/**",
       "**/node_modules/**",
       "**/dist/**",
+      "packages/extension/skills/**",
       "artifacts/**",
       ".tmp/**",
       ".vscode-test/**",

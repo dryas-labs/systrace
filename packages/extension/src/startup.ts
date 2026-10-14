@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import {
   AdapterError,
+  verifyLanguageServiceVersion,
   type LanguageServiceBackend,
   type ProjectOptions,
   type ProjectGraph,
@@ -75,17 +74,12 @@ export async function verifyLanguageServer(
   backend: LanguageServiceBackend,
 ): Promise<void> {
   try {
-    const version = await promisify(execFile)(config.lspPath, [...backend.version.args], {
-      windowsHide: true,
-      timeout: Math.min(config.engine.timeoutMs ?? 30000, 10000),
-      env: backend.launch.environment(),
-      maxBuffer: 64 * 1024,
-    });
-    if (!backend.version.matchesOutput(version.stdout, config.engine.expectedVersion!))
-      throw new AdapterError(
-        "ENGINE_VERSION_MISMATCH",
-        "The language server does not match dryas.expectedEngineVersion. Use the configured maintenance build.",
-      );
+    await verifyLanguageServiceVersion(
+      config.lspPath,
+      config.engine.expectedVersion!,
+      backend,
+      config.engine.timeoutMs ?? 30000,
+    );
   } catch (error) {
     throw startupError(error, "version-check");
   }

@@ -2,8 +2,7 @@
 
 **English** | [简体中文](architecture.zh-Hans.md)
 
-Systrace is a VS Code/Cursor extension with read-only MCP tools for external agents:
-`validate`, `find_element`, `describe_element` and `library_lookup`. The language engine owns parsing, name resolution and semantic checks.
+Systrace is a VS Code/Cursor extension with a current-window diagnostic tool and an independent LSP diagnostics command. The language engine owns parsing, name resolution and semantic checks.
 
 `config/engine.json` records the tested engine version and source revision. Updating
 the engine repository does not automatically update the product. The engine interface
@@ -13,8 +12,11 @@ an implementation, not which SysML release or engine capabilities it implements.
 ```mermaid
 flowchart LR
   Editor[VS Code / Cursor] --> Extension[extension]
-  Agent[External agent] --> MCP[MCP stdio server]
-  MCP --> Session[ProjectSession]
+  Agent[External agent] --> Command[LSP diagnostics command]
+  Command --> Service
+  Copilot[Current-window Copilot tool] --> Problems[Editor Problems collection]
+  Extension --> Problems
+  Session[ProjectSession]
   Extension --> Session
   Session --> Model[LanguageBackend]
   Extension --> Service[LanguageServiceBackend]
@@ -37,8 +39,7 @@ engine's standard-library document protocol.
 
 Engine-specific framing, RPC schemas, diagnostic mapping and native queries live in
 implementations under `packages/engine-adapter/src/backends`. Product callers use
-the language-engine interface rather than invoking native RPCs directly. The four MCP tool schemas and
-current result behavior are retained. Query kinds and diagnostic raw details may
+the language-engine interface rather than invoking native RPCs directly. Saved-model API contracts retain their existing result behavior. Query kinds and diagnostic raw details may
 remain provider-specific; the interface does not invent a universal semantic taxonomy.
 
 The provider connects the editor and model tools
@@ -52,15 +53,14 @@ Each project root uses a separate LSP client. Its own source folders and declare
 project dependencies are sent to the same engine session for cross-file resolution.
 The shared `.systrace/project.json` records relative source folders and references.
 The adapter loads transitive references once, rejects missing, overlapping or cyclic
-project configurations, and uses the same closure for saved validation and MCP queries.
+project configurations, and uses the same closure for saved validation and saved-model queries.
 The editor sends unsaved documents only to their owning project. Dependency tabs use
 a separate read-only URI scheme and saved content; their LSP URIs map back to the
 original files. Saving a dependency updates consumers even when that project is closed.
 Changing the dependency graph reconnects affected LSP clients. The current provider
 uses the same configured engine version for LSP and API; they manage separate
 processes and model state. Matching configuration is not an independent certification
-of standard-library identity. LSP can include unsaved editor content; MCP reads saved
-files. Their results must not be represented as observations of an identical snapshot.
+of standard-library identity. LSP can include unsaved editor content; the diagnostic command reads saved files. Their results must not be represented as observations of an identical snapshot.
 
 Engine-specific environment overrides are removed from the language engine child processes.
 This version does not support replacing the standard library or loading external
@@ -117,7 +117,7 @@ correctness are different claims.
 
 `config.example.js` is the generic template. Developers put local configuration in
 the ignored `config.js`. Development and test scripts read engine and editor locations
-from it. Installed extension settings are managed by the editor, and the MCP CLI uses
+from it. Installed extension settings are managed by the editor, and the diagnostic command uses
 startup arguments. Both read the shared project configuration when present;
 `dryas.modelRoots` and `--model-root` remain fallbacks for projects without it. Neither executes an arbitrary `config.js` from a model project.
 
@@ -137,6 +137,17 @@ session behavior; they do not establish native language correctness.
 
 References: [VS Code LSP guide](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide),
 [extension testing guide](https://code.visualstudio.com/api/working-with-extensions/testing-extension),
-[MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk).
+[independent command TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk).
 
 The current selection is listed in [Language engine](language-engine.md).
+
+## Diagnostic observations
+
+The current-window Copilot tool reads the existing Problems collection, including unsaved
+buffers and disconnected-project diagnostics. It returns `observation: "editor"` and current
+language-service connection states. It never starts a validation request.
+The separate `dryas-lsp-diagnostics` command returns `observation: "lsp-recompute"`, starts
+its own LSP process and reads saved project/reference files, with an optional in-memory overlay.
+Both use 1-based UTF-16 positions. The command's 500 ms quiet period only sets `settled`;
+index completion remains unconfirmed. Neither result is the model API's saved-project
+`validate` result. See [the command usage](../README.md#diagnostic-observations-for-agents).

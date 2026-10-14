@@ -10,8 +10,6 @@ const actions: Record<string, string> = {
   selectProject: "dryas.selectProject",
   closeProject: "dryas.closeProject",
   validateProject: "dryas.validateProject",
-  showMcpConfiguration: "dryas.showMcpConfiguration",
-  manageMcpServers: "dryas.manageMcpServers",
   configureModelRoots: "dryas.configureModelRoots",
   newNamespace: "dryas.newNamespaceInFolder",
   deleteNamespace: "dryas.deleteNamespace",
@@ -55,8 +53,6 @@ export class DetailedProjects implements vscode.WebviewViewProvider, vscode.Disp
                   "selectProject",
                   "closeProject",
                   "validateProject",
-                  "showMcpConfiguration",
-                  "manageMcpServers",
                   "configureModelRoots",
                 ].includes(action)
                 ? node.folder
@@ -144,8 +140,6 @@ export class DetailedProjects implements vscode.WebviewViewProvider, vscode.Disp
               "selectProject",
               "closeProject",
               "validateProject",
-              "showMcpConfiguration",
-              "manageMcpServers",
               "configureModelRoots",
               "newNamespace",
               "addProjectReference",

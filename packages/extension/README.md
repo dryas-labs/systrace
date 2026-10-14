@@ -5,7 +5,7 @@
 SysML v2 editing for VS Code and Cursor, powered by an external language engine.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.20 uses language engine build `v0.9.2-dryas.6`. Selected completion details show
+Version 0.1.21 uses language engine build `v0.9.2-dryas.6`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
@@ -52,12 +52,8 @@ remains enabled; explicit language-specific user settings take precedence.
 - **DRYAS: Show Language Service Status** shows connection state, startup reason,
   attempt count and any startup failure code. The status bar opens this view too.
 - **DRYAS: Validate Saved Project** opens a read-only validation result in an untitled document.
-- **DRYAS: Show MCP Configuration** opens a local configuration for an external agent.
-  That configuration contains runtime paths; keep it out of version control. The MCP CLI needs Node.js 22.13 or later.
 
-Editor diagnostics may include unsaved buffers. MCP and project validation use saved
-files across the complete set of model roots. The MCP server provides four read-only tools: `validate`, `find_element`,
-`describe_element` and `library_lookup`. The library tool queries the engine’s bundled standard library.
+Editor diagnostics may include unsaved buffers. Saved-project validation reads the complete configured saved project and its references through the model API.
 
 **Connected** means the LSP handshake succeeded. This engine does not announce
 index completion, so the extension reports `index: unconfirmed`; cross-file
@@ -88,10 +84,10 @@ Legal texts and third-party notices retain their original wording.
 The **Projects** view in the dedicated **Systrace** sidebar lists the workspace's local project folders.
 Use **New Systrace Project** to choose a name and parent directory, or **Open Systrace Project**
 to add an existing folder. Each folder is a project root. Click a project to make it the
-default target for saved validation and MCP configuration; switching editor tabs does not
+default target for saved validation; switching editor tabs does not
 change that selection. Other projects remain editable. Closing a project removes its
 workspace entry and stops this extension's services, without deleting files or changing an
-manually configured external agent's existing MCP connection. Save the VS Code workspace to reopen its project list.
+independently started diagnostic commands. Save the VS Code workspace to reopen its project list.
 
 Model files can live at the project root or in subfolders. Use **Configure Model Source
 Folders** to save the scope in `.systrace/project.json`. Existing projects without this file
@@ -104,12 +100,6 @@ provided by this version.
 Project roots must be separate, non-nested directories so two language services cannot own
 the same source. An overlapping workspace configuration is reported instead of loading a
 combined model. Opening projects does not create a dependency; use Add Project Reference to declare one.
-
-Right-click a project and choose **Show MCP Configuration** to generate a connection bound
-to that root and its configured model directories. A configuration already given to an agent
-keeps that binding when the selected project changes. External agents manage their own chats;
-this extension does not create or retarget those conversations. The existing four read-only
-MCP tools are unchanged. Keep generated configurations containing local paths outside Git.
 
 For an isolated two-project check, run `npm run test:host -- --projects --vsix`; add `--cursor`
 to run the same check in the configured Cursor installation.
@@ -141,7 +131,7 @@ identifier regular expression decides the spelling. Temporary buffers are closed
 checking; unavailable, failed or timed-out checks do not create a file.
 Existing files are never overwritten. The filename and package
 name can subsequently be changed independently. Creating from another project's
-context menu does not change the current project or existing MCP bindings.
+context menu does not change the current project.
 
 Names containing an apostrophe currently cannot pass this creation check when the
 language service returns an escaped label instead of the requested name. The action
@@ -172,7 +162,7 @@ for open projects using their current source folders. External folders are left 
 their existing project configuration supplies the scope, or the entire folder is used
 when no configuration exists. **Configure Model Source Folders**
 also writes this file. It takes precedence over the legacy `dryas.modelRoots` setting and
-MCP's `--model-root` fallback. Engine executable paths stay in local editor configuration.
+saved-model callers' fallback roots. Engine executable paths stay in local editor configuration.
 
 ```json
 {
@@ -182,14 +172,13 @@ MCP's `--model-root` fallback. Engine executable paths stay in local editor conf
 }
 ```
 
-The LSP, saved validation and MCP queries load the same dependency closure. Only saved
+The LSP, saved validation and saved-model queries load the same dependency closure. Only saved
 changes in referenced projects propagate to consumers; unsaved work stays in the owning
 project's editing session. Saved dependency changes refresh consumer analysis and read-only
 tabs. Reference/source-configuration changes reconnect affected language services and close
 their old dependency tabs. Deleting a dependency source also reloads its consumers to
 remove cached declarations. Ordinary saved edits use file updates without restarting.
-Existing MCP connections keep their project root while reading
-updated project configuration on each request.
+Saved-model sessions reread project configuration on each request.
 
 A project reference makes source available; SysML `import` still controls namespace access.
 The engine resolves names and reports model conflicts. Project-reference cycles, missing
@@ -205,7 +194,7 @@ The default **Compact — one line** uses the editor's native tree: element name
 explicit type and declaration kind. **Detailed — two lines** uses a custom sidebar
 presentation, with the name above its kind and type. Both use the same project
 provider and commands. Switching modes does not reconnect the language engine or
-change project/MCP scope. Expansion state is kept separately by each view.
+change project scope. Expansion state is kept separately by each view.
 
 Declaration kinds, reference modifiers and explicit types come from the language
 engine's document outline. Systrace does not parse model text to invent missing
@@ -224,24 +213,51 @@ The display reflects only the distinctions supplied by the engine. Unknown categ
 question-mark icon with the original label. For example, an `enum` label alone cannot tell
 an enumeration literal from a usage.
 
-## Workspace MCP integration
+## Diagnostic observations for agents
 
-In VS Code hosts that support MCP server definition providers, the extension automatically
-registers one server for each local project in a trusted workspace. Labels include the project
-name and a workspace-persisted number to distinguish duplicate names. Opening or closing projects
-and changing engine settings updates registration. Each server stays bound to its project;
-selecting another project does not retarget an agent connection. Project references are read
-from the shared project configuration.
+Copilot can use **Systrace: Current Window Problems** (`#systraceProblems`, tool
+`dryas_editor_diagnostics`). It returns `observation: "editor"` from this window's
+existing SysML/KerML Problems collection, including every severity, unsaved documents
+and library markers. Each project's existing connection state includes
+`index: "unconfirmed"`. Disconnection does not discard the current collection or make
+this read fail. An empty collection says nothing about checking completeness.
+The tool does not save files, trigger validation or connect to another window.
 
-Choose **Manage Workspace MCP Servers** from the Systrace project or sidebar menu, or run
-**DRYAS: Manage Workspace MCP Servers**. This opens the host's MCP server list with actual
-connection status, start, stop, restart, enable, disable and output controls. The host owns
-enablement and startup policy; registration alone does not mean connected. The project tree's
-`connected` status still refers to LSP. Host trust and tool authorization settings apply.
+For an independent observation, build the repository and run:
 
-Automatic registration uses the editor's bundled Node.js and does not create or overwrite
-workspace or global MCP configuration files. If the same project was previously registered
-manually, disable that old entry in the host to avoid duplicate tools.
-**Show MCP Configuration** remains available for other agent clients; its exported configuration
-uses the system `node` command. Editors without the provider API retain manual configuration,
-including Cursor versions that do not implement this VS Code interface.
+```sh
+npm exec -- dryas-lsp-diagnostics --project <project-folder>
+```
+
+The installed extension also includes the standalone command at `dist/lsp-diagnostics.cjs`.
+Its self-contained skill is in `skills/sysml-diagnostics`; copy that whole folder to a
+skill directory supported by your agent. The skill includes `scripts/diagnostics.cjs`,
+which can be run with Node.js without VS Code or the product repository.
+
+The command returns `observation: "lsp-recompute"` and reads all saved SysML/KerML sources
+in the configured project and its declared references. It checks the engine version and
+uses the provider's normal LSP launch arguments. `--lsp` defaults to `sysml-lsp` on PATH;
+`--expected-version` defaults to the selected engine build. User-level settings and
+machine paths are not read. Source folder precedence is explicit `--model-root`, then
+`.systrace/project.json`, then project-local `.vscode/settings.json` (`dryas.modelRoots`),
+then `["."]`. Explicit roots affect only the consuming project; references retain their own scope.
+
+`--path <relative-path>` filters printed diagnostics only. Repeat `--path` or `--model-root`
+for multiple entries. `--overlay <relative-file>` reads UTF-8 from stdin and replaces that
+existing project file only in this LSP session. It never changes the file on disk. The file
+must belong to the project's source scope; referenced projects and library files cannot be overlaid.
+
+After all files have been opened, receiving at least one diagnostic publication per file
+(including an empty publication) and then 500 ms without updates yields `settled: true`.
+This is a quiet-period observation, not proof of index completion. Results always report
+`index: "unconfirmed"`. `--timeout-ms` defaults to 30000. If initialization succeeded but
+the observation times out, the command returns available diagnostics with `settled: false`
+and exits 0. No model files also produces an unsettled observation. Diagnostic errors do
+not change the exit code. Invalid input, version/handshake failure or a process/protocol
+failure exits 1 with a single sanitized error line.
+
+Both observations use 1-based lines and UTF-16 character columns. They are separate from
+**Validate Saved Project**, which continues to call the model API for saved-project checks
+and retains its 1-based UTF-8 byte-column contract. Neither empty diagnostics nor
+`settled: false` establishes complete checking. `documentVersion` in the editor observation
+identifies the current buffer, not a certified version of its cached diagnostics.

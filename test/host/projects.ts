@@ -3,8 +3,6 @@ import * as vscode from "vscode";
 import type { Projects } from "../../packages/extension/src/projects.js";
 import type { ContentNode } from "../../packages/extension/src/project-tree.js";
 import assert from "node:assert/strict";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 async function eventually<T>(
   read: () => PromiseLike<T>,
@@ -188,42 +186,7 @@ export async function run(): Promise<void> {
   await vscode.commands.executeCommand("dryas.validateProject");
   const validation = JSON.parse(vscode.window.activeTextEditor!.document.getText());
   assert.equal(validation.project.errors, 0);
-  await vscode.commands.executeCommand("dryas.showMcpConfiguration");
-  const config = JSON.parse(vscode.window.activeTextEditor!.document.getText()).mcpServers.dryas;
-  assert.equal(config.args[config.args.indexOf("--project") + 1], a.uri.fsPath);
-  assert.equal(config.args[config.args.indexOf("--model-root") + 1], ".");
   await vscode.commands.executeCommand("dryas.selectProject", b);
-  const client = new Client({ name: "systrace-project-host-check", version: "1.0.0" });
-  const transport = new StdioClientTransport({
-    command: config.command,
-    args: config.args,
-    stderr: "pipe",
-  });
-  transport.stderr?.on("data", () => {});
-  try {
-    await client.connect(transport);
-    const response = await client.callTool({ name: "validate", arguments: {} });
-    assert(!response.isError);
-    const report = response.structuredContent as {
-      project: { errors: number };
-      content: { files: { file: string }[] };
-    };
-    assert.equal(
-      report.project.errors,
-      0,
-      "A's existing MCP binding must survive a UI switch to B",
-    );
-    const found = await client.callTool({ name: "find_element", arguments: { name: "Battery" } });
-    assert(!found.isError);
-    const elements = found.structuredContent as { items: { qualifiedName: string }[] };
-    assert(elements.items.some((item) => item.qualifiedName === "Components::Battery"));
-    assert.deepEqual(report.content.files.map((file) => file.file).sort(), [
-      "definitions.sysml",
-      "design/system.sysml",
-    ]);
-  } finally {
-    await client.close();
-  }
 
   const third = vscode.Uri.joinPath(a.uri, "..", "ProjectC");
   for (const directory of ["architecture", "requirements", ".vscode"])
@@ -332,6 +295,6 @@ export async function run(): Promise<void> {
   );
   await vscode.workspace.fs.stat(third);
   console.log(
-    "DRYAS host checks passed: namespace-file deletion propagation, flat project sources, named source folders, LSP-checked namespace spellings, dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, stable MCP binding, open and close without deleting files.",
+    "DRYAS host checks passed: namespace-file deletion propagation, flat project sources, named source folders, LSP-checked namespace spellings, dedicated sidebar, expandable source and library trees, unsaved outline refresh, source navigation, project-root discovery, nested sources, two-project completion/navigation/diagnostic isolation, explicit selection, open and close without deleting files.",
   );
 }

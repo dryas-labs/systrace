@@ -7,8 +7,8 @@ import { root, loadConfig } from "./config.mjs";
 
 const config = await loadConfig();
 const host = process.argv.includes("--cursor") ? "cursor" : "vscode";
-const mcpChecks = process.argv.includes("--mcp");
-const projectChecks = process.argv.includes("--projects") || mcpChecks;
+const diagnosticChecks = process.argv.includes("--diagnostics");
+const projectChecks = process.argv.includes("--projects");
 const referenceChecks = process.argv.includes("--references");
 const executable =
   config.editors[host] ||
@@ -183,7 +183,7 @@ const args = [
   `--user-data-dir=${resolve(workspace, "profile")}`,
   `--extensions-dir=${resolve(workspace, "extensions")}`,
   `--extensionDevelopmentPath=${extensionPath}`,
-  `--extensionTestsPath=${resolve(root, mcpChecks ? "test/host/dist/mcp.cjs" : referenceChecks ? "test/host/dist/references.cjs" : projectChecks ? "test/host/dist/projects.cjs" : "test/host/dist/index.cjs")}`,
+  `--extensionTestsPath=${resolve(root, diagnosticChecks ? "test/host/dist/diagnostics.cjs" : referenceChecks ? "test/host/dist/references.cjs" : projectChecks ? "test/host/dist/projects.cjs" : "test/host/dist/index.cjs")}`,
 ];
 let output = "";
 const code = await new Promise((done, reject) => {
@@ -224,5 +224,5 @@ await writeFile(resolve(workspace, "host.log"), output);
 if (code !== 0 || !output.includes("DRYAS host checks passed:"))
   throw new Error("Host checks failed. Inspect the ignored .tmp host-test log.");
 console.log(
-  `${host}: ${process.argv.includes("--vsix") ? "VSIX installation and " : ""}${mcpChecks ? "workspace MCP registration and native tool calls" : referenceChecks ? "project references and saved dependency updates" : projectChecks ? "project management and isolation" : "activation, language features and saved validation"} passed in an isolated extension host.`,
+  `${host}: ${process.argv.includes("--vsix") ? "VSIX installation and " : ""}${diagnosticChecks ? "Copilot diagnostic observation" : referenceChecks ? "project references and saved dependency updates" : projectChecks ? "project management and isolation" : "activation, language features and saved validation"} passed in an isolated extension host.`,
 );

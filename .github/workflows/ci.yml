@@ -38,7 +38,7 @@ jobs:
           cache: false
       - name: Build configured language engine
         run: node scripts/build-engine.mjs
-      - name: Test native engine and MCP tools
+      - name: Test native engine and saved-model queries
         run: npm run test:engine
       - name: Package VSIX
         run: npm run package:vsix

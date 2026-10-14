@@ -2,8 +2,7 @@
 
 [English](architecture.md) | **简体中文**
 
-Systrace 是 VS Code/Cursor 扩展，并向外部 agent 提供只读 MCP 工具：
-`validate`、`find_element`、`describe_element`、`library_lookup`。
+Systrace 是 VS Code/Cursor 扩展，提供当前窗口诊断工具和独立 LSP 诊断命令。
 language engine（语言引擎）负责解析、名称解析和语义检查。
 
 `config/engine.json` 记录经过测试的引擎版本和源码提交；更新引擎仓库不会自动升级产品。
@@ -13,8 +12,11 @@ language engine（语言引擎）负责解析、名称解析和语义检查。
 ```mermaid
 flowchart LR
   Editor[VS Code / Cursor] --> Extension[extension]
-  Agent[External agent] --> MCP[MCP stdio server]
-  MCP --> Session[ProjectSession]
+  Agent[External agent] --> Command[LSP diagnostics command]
+  Command --> Service
+  Copilot[Current-window Copilot tool] --> Problems[Editor Problems collection]
+  Extension --> Problems
+  Session[ProjectSession]
   Extension --> Session
   Session --> Model[LanguageBackend]
   Extension --> Service[LanguageServiceBackend]
@@ -35,7 +37,7 @@ flowchart LR
 
 引擎专用的通信格式、RPC 数据结构、诊断映射和原生查询集中在
 `packages/engine-adapter/src/backends` 下的后端实现中。
-产品调用方使用语言引擎接口，不直接发送原生 RPC。四个 MCP 工具的输入格式和现有返回行为保持不变。
+产品调用方使用语言引擎接口，不直接发送原生 RPC。保存模型 API 保留现有结果行为。
 查询 kind 和诊断原始详情可能仍由后端定义；该接口不虚构统一的语义类别体系。
 
 引擎提供者将编辑器和模型工具接到所选语言引擎；没有自动引擎回退或用户可见的引擎选择器。
@@ -45,12 +47,12 @@ flowchart LR
 
 每个项目根目录使用独立 LSP 客户端，本项目源码和声明的项目依赖一起送入同一引擎会话。
 共享的 `.systrace/project.json` 保存相对路径的源码目录和项目引用。适配层将传递依赖去重加载，
-拒绝缺失、重叠或循环的项目配置；保存校验和 MCP 查询使用相同依赖范围。
+拒绝缺失、重叠或循环的项目配置；保存校验和保存模型查询使用相同依赖范围。
 编辑器只向所属项目发送未保存内容。依赖标签页使用独立只读 URI 和已保存内容，
 在 LSP 边界还原原文件 URI。依赖保存后更新使用它的项目，关闭依赖项目不会取消此更新。
 引用配置变化会重连受影响的 LSP 客户端。
 当前提供者为 LSP 和 API 使用相同配置的引擎版本；两者分别管理进程和模型状态。
-配置一致不等于标准库身份已获得独立认证。LSP 可包含未保存编辑，MCP 读取保存文件，不能把
+配置一致不等于标准库身份已获得独立认证。LSP 可包含未保存编辑，独立命令读取保存文件，不能把
 两者的结果表述为同一快照的观察结果。
 
 语言引擎子进程会清除引擎专用环境覆盖；当前不支持用环境变量替换标准库或加载外部分析工具。
@@ -87,7 +89,7 @@ flowchart LR
 ## 配置与隐私
 
 `config.example.js` 提供通用模板；开发者在不跟踪的 `config.js` 填写本地配置，开发和测试脚本
-从中读取引擎及编辑器位置。安装后的扩展设置由编辑器管理，MCP CLI 使用启动参数。
+从中读取引擎及编辑器位置。安装后的扩展设置由编辑器管理，diagnostic command 使用启动参数。
 两者优先读取共享项目配置；没有该文件时分别使用 `dryas.modelRoots` 和 `--model-root` 后备配置。两者都不会
 执行模型项目中的任意 `config.js`。
 
@@ -102,6 +104,15 @@ mock 后端只检验接口与会话行为，不能证明原生语言实现的正
 
 参考：[VS Code LSP 指南](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide)、
 [扩展测试指南](https://code.visualstudio.com/api/working-with-extensions/testing-extension)、
-[MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)。
+[独立命令 TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)。
 
 当前引擎选择见 [Language engine](language-engine.zh-Hans.md)。
+
+## 诊断观察
+
+当前窗口的 Copilot 工具读取已有问题集合，包括未保存缓冲区和断开连接的项目残留诊断，
+返回 `observation: "editor"` 及现有连接状态，不触发重新校验。
+独立的 `dryas-lsp-diagnostics` 命令返回 `observation: "lsp-recompute"`，启动自己的 LSP
+进程，读取保存的项目及引用文件，可选地在内存中替换一个文件。两条观察使用 1 起始 UTF-16 位置。
+命令的 500 毫秒静默条件只决定 `settled`，索引完成仍未确认。它们都与模型 API 的保存工程
+`validate` 结果分开。使用方式见[诊断命令说明](../README.zh-Hans.md#agent-诊断观察)。

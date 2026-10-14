@@ -63,3 +63,6 @@ export {
   type ReferencedProject,
   type ReferenceSummary,
 } from "./project-graph.js";
+
+export { verifyLanguageServiceVersion } from "./lsp-version.js";
+export { observeLspDiagnostics, type LspDiagnosticsOptions } from "./lsp-diagnostics.js";

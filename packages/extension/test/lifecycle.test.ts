@@ -46,7 +46,6 @@ vi.mock("vscode", () => {
   };
   return {
     lm: undefined,
-    McpStdioServerDefinition: undefined,
     Uri: { file: host.uri },
     TreeItemCollapsibleState: { None: 0 },
     TreeItem: class {},

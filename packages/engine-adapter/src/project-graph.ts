@@ -196,7 +196,7 @@ export function referenceSummaries(graph: ProjectGraph): ReferenceSummary[] {
   }));
 }
 
-/** One saved scope for editor startup, validation and MCP model queries. */
+/** One saved scope for editor startup, validation and saved model queries. */
 export async function readProjectSnapshot(
   root: string,
   fallbackRoots: string[] = ["."],
