@@ -1,7 +1,7 @@
 # Third-party notices
 
 Generated from dependencies included in the extension and command bundles.
-The language engine is configured as an external executable and is not included in this VSIX.
+Native language-engine, standard-library and Go dependency notices are provided separately in runtime/licenses; corresponding engine source is in runtime/source/source.zip.
 
 ## balanced-match 4.0.4
 

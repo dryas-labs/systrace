@@ -14,11 +14,20 @@ const rpc = createMessageConnection(
   new StreamMessageReader(process.stdin),
   new StreamMessageWriter(process.stdout),
 );
-rpc.onRequest("initialize", () => ({
-  capabilities: { positionEncoding: "utf-16", textDocumentSync: 1 },
-}));
+rpc.onRequest("initialize", () =>
+  process.argv.includes("handshake-timeout")
+    ? new Promise(() => {})
+    : { capabilities: { positionEncoding: "utf-16", textDocumentSync: 1 } },
+);
 rpc.onNotification("textDocument/didOpen", async ({ textDocument }) => {
   if (process.argv.includes("silent")) return;
+  if (process.argv.includes("malformed")) {
+    await rpc.sendNotification("textDocument/publishDiagnostics", {
+      uri: textDocument.uri,
+      diagnostics: [{ message: "Missing range" }],
+    });
+    return;
+  }
   if (process.argv.includes("crash")) {
     process.exit(2);
   }
@@ -28,6 +37,16 @@ rpc.onNotification("textDocument/didOpen", async ({ textDocument }) => {
           range: { start: { line: 0, character: 3 }, end: { line: 0, character: 6 } },
           message: "Fixture diagnostic",
           severity: 1,
+          tags: [1, 2],
+          relatedInformation: [
+            {
+              message: "Related",
+              location: {
+                uri: textDocument.uri,
+                range: { start: { line: 0, character: 3 }, end: { line: 0, character: 6 } },
+              },
+            },
+          ],
         },
       ]
     : [];

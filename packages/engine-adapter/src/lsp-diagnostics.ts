@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { spawn } from "node:child_process";
-import { readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parse, type ParseError } from "jsonc-parser";
 import {
   createMessageConnection,
   StreamMessageReader,
@@ -13,7 +11,10 @@ import { z } from "zod";
 import { AdapterError } from "./errors.js";
 import { DEFAULT_LANGUAGE_ENGINE_PROVIDER } from "./default-engine.js";
 import type { LanguageEngineProvider } from "./provider.js";
-import { readProjectDefinition, resolveProjectGraph, referenceSummaries } from "./project-graph.js";
+import {
+  resolveDiagnosticsProject,
+  type DiagnosticsProjectOptions,
+} from "./diagnostics-project.js";
 import { readSnapshot, relativeName } from "./snapshot.js";
 import { verifyLanguageServiceVersion } from "./lsp-version.js";
 
@@ -31,14 +32,24 @@ const publication = z.object({
       severity: z.number().int().min(1).max(4).optional(),
       code: z.union([z.string(), z.number()]).optional(),
       source: z.string().optional(),
+      tags: z.array(z.number().int()).optional(),
+      relatedInformation: z
+        .array(
+          z.object({
+            message: z.string(),
+            location: z.object({
+              uri: z.string(),
+              range: z.object({ start: position, end: position }),
+            }),
+          }),
+        )
+        .optional(),
     }),
   ),
 });
-export interface LspDiagnosticsOptions {
-  projectRoot: string;
+export interface LspDiagnosticsOptions extends DiagnosticsProjectOptions {
   lspPath?: string;
   expectedVersion?: string;
-  modelRoots?: string[];
   paths?: string[];
   overlay?: { path: string; text: string };
   timeoutMs?: number;
@@ -51,26 +62,13 @@ export interface ObservedDiagnostic {
   message: string;
   code?: string | number;
   source?: string;
+  tags?: number[];
+  relatedInformation?: {
+    message: string;
+    location: { uri: string; range: ObservedDiagnostic["range"] };
+  }[];
 }
 
-async function folderSettings(root: string): Promise<string[]> {
-  try {
-    const errors: ParseError[] = [];
-    const settings = parse(await readFile(join(root, ".vscode", "settings.json"), "utf8"), errors, {
-      allowTrailingComma: true,
-    });
-    if (errors.length) throw new Error();
-    const roots = settings?.["dryas.modelRoots"];
-    if (roots === undefined) return ["."];
-    return z.array(z.string().min(1)).min(1).parse(roots);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return ["."];
-    throw new AdapterError(
-      "INVALID_ARGUMENT",
-      "Cannot read project-local dryas.modelRoots. Check .vscode/settings.json.",
-    );
-  }
-}
 function uriKey(uri: string): string {
   if (!uri.startsWith("file:")) return uri;
   const path = fileURLToPath(uri);
@@ -88,21 +86,8 @@ export async function observeLspDiagnostics(
       "The timeout must be between 1 and 300000 milliseconds.",
     );
   const deadline = Date.now() + timeout;
-  const root = await realpath(options.projectRoot);
-  // Only read legacy folder settings when the shared project file is absent.
-  let definition;
-  try {
-    await readFile(join(root, ".systrace", "project.json"));
-    definition = await readProjectDefinition(root);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    definition = await readProjectDefinition(
-      root,
-      options.modelRoots ?? (await folderSettings(root)),
-    );
-  }
-  if (options.modelRoots) definition = { ...definition, modelRoots: options.modelRoots };
-  const graph = await resolveProjectGraph(root, ["."], new Map([[root, definition]]));
+  const { graph, context } = await resolveDiagnosticsProject(options);
+  const root = context.project.root;
   const documents: { uri: string; file: string; language: string; content: string }[] = [];
   for (const [index, project] of graph.projects.entries()) {
     const snapshot = await readSnapshot(
@@ -154,7 +139,22 @@ export async function observeLspDiagnostics(
       "TIMEOUT",
       "The command deadline elapsed before language-server initialization.",
     );
-  await verifyLanguageServiceVersion(executable, expected, backend, remaining());
+  try {
+    await verifyLanguageServiceVersion(executable, expected, backend, remaining());
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    if (code === "ENOENT")
+      throw new AdapterError(
+        "ENGINE_NOT_FOUND",
+        "Supply --lsp <executable> or make sysml-lsp available on PATH.",
+      );
+    if (code === "EACCES" || code === "EPERM")
+      throw new AdapterError(
+        "ENGINE_ACCESS_DENIED",
+        "Check access to the configured language-server executable.",
+      );
+    throw error;
+  }
   const child = spawn(executable, [...backend.launch.args], {
     shell: false,
     windowsHide: true,
@@ -254,6 +254,27 @@ export async function observeLspDiagnostics(
         message: diagnostic.message,
         ...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
         ...(diagnostic.source === undefined ? {} : { source: diagnostic.source }),
+        ...(diagnostic.tags === undefined ? {} : { tags: diagnostic.tags }),
+        ...(diagnostic.relatedInformation === undefined
+          ? {}
+          : {
+              relatedInformation: diagnostic.relatedInformation.map((information) => ({
+                message: information.message,
+                location: {
+                  uri: information.location.uri,
+                  range: {
+                    start: {
+                      line: information.location.range.start.line + 1,
+                      column: information.location.range.start.character + 1,
+                    },
+                    end: {
+                      line: information.location.range.end.line + 1,
+                      column: information.location.range.end.character + 1,
+                    },
+                  },
+                },
+              })),
+            }),
       })),
     );
     checkQuiet();
@@ -290,7 +311,13 @@ export async function observeLspDiagnostics(
         capabilities: {
           general: { positionEncodings: ["utf-16"] },
           workspace: { workspaceFolders: true, configuration: true },
-          textDocument: { publishDiagnostics: { versionSupport: true } },
+          textDocument: {
+            publishDiagnostics: {
+              versionSupport: true,
+              relatedInformation: true,
+              tagSupport: { valueSet: [1, 2] },
+            },
+          },
         },
       });
       if (
@@ -325,7 +352,8 @@ export async function observeLspDiagnostics(
       positionBase: 1 as const,
       engine: { name: provider.id, version: expected },
       files: documents.map((doc) => ({ file: doc.file, received: received.has(uriKey(doc.uri)) })),
-      references: referenceSummaries(graph),
+      project: context.project,
+      references: context.references,
       paths,
       ...(options.overlay ? { overlay: relativeName(options.overlay.path) } : {}),
       diagnostics: [...reports.values()].flat().filter((diagnostic) => visible(diagnostic.file)),

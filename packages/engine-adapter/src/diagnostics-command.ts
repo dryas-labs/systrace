@@ -2,11 +2,13 @@
 import { parseArgs } from "node:util";
 import { observeLspDiagnostics } from "./lsp-diagnostics.js";
 import { AdapterError } from "./errors.js";
+import { resolveDiagnosticsProject } from "./diagnostics-project.js";
 
 export async function runDiagnosticsCommand(
   args: string[],
   io: {
     input: AsyncIterable<Uint8Array | string>;
+    cwd?: string;
     out(text: string): void;
     error(text: string): void;
   },
@@ -17,6 +19,7 @@ export async function runDiagnosticsCommand(
       args,
       options: {
         project: { type: "string" },
+        context: { type: "boolean" },
         lsp: { type: "string" },
         "model-root": { type: "string", multiple: true },
         path: { type: "string", multiple: true },
@@ -28,12 +31,20 @@ export async function runDiagnosticsCommand(
     });
     if (values.help) {
       io.out(
-        "dryas-lsp-diagnostics --project <folder> [--lsp sysml-lsp] [--model-root .] [--path relative-file] [--overlay relative-file] [--timeout-ms 30000] [--expected-version build]\nOverlay reads UTF-8 text from stdin and does not write files. Paths filter output only. Exit 0 reports an observation, not validation success.\n",
+        "dryas-lsp-diagnostics [--project <folder>] [--context] [--lsp sysml-lsp] [--model-root .] [--path relative-file] [--overlay relative-file] [--timeout-ms 30000] [--expected-version build]\n--project takes precedence; otherwise search the working directory and its ancestors for project configuration. --context reads project scope without starting LSP. A known project folder needs no configuration file; use --project . if it is the working directory.\nIf the language server is missing, supply --lsp <executable> or configure PATH. Keep the returned JSON and reuse it for summaries.\nOverlay reads UTF-8 text from stdin and does not write files. Paths filter output only. Exit 0 reports an observation, not validation success.\n",
       );
       return 0;
     }
-    if (!values.project)
-      throw new AdapterError("INVALID_ARGUMENT", "A project folder is required (--project).");
+    const projectOptions = {
+      ...(values.project === undefined ? {} : { projectRoot: values.project }),
+      ...(values["model-root"] ? { modelRoots: values["model-root"] } : {}),
+      ...(io.cwd === undefined ? {} : { cwd: io.cwd }),
+    };
+    if (values.context) {
+      const { context } = await resolveDiagnosticsProject(projectOptions);
+      io.out(JSON.stringify(context) + "\n");
+      return 0;
+    }
     let text = "";
     if (values.overlay) {
       const chunks: Buffer[] = [];
@@ -48,9 +59,8 @@ export async function runDiagnosticsCommand(
       text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
     }
     const result = await observe({
-      projectRoot: values.project,
+      ...projectOptions,
       ...(values.lsp ? { lspPath: values.lsp } : {}),
-      ...(values["model-root"] ? { modelRoots: values["model-root"] } : {}),
       ...(values.path ? { paths: values.path } : {}),
       ...(values.overlay ? { overlay: { path: values.overlay, text } } : {}),
       ...(values["expected-version"] ? { expectedVersion: values["expected-version"] } : {}),
@@ -63,6 +73,12 @@ export async function runDiagnosticsCommand(
     const messages: Record<string, string> = {
       INVALID_ARGUMENT: "Check command arguments and project-local configuration.",
       INVALID_PATH: "Check the project, source folders and relative file paths.",
+      PROJECT_NOT_FOUND:
+        "No Systrace project configuration was found from the working directory. Supply --project <known-folder>; configuration is optional for an explicit project root.",
+      ENGINE_NOT_FOUND:
+        "The language-server executable was not found. Supply --lsp <executable> or make sysml-lsp available on PATH.",
+      ENGINE_ACCESS_DENIED:
+        "Cannot access the configured language-server executable. Check its path and execution permissions.",
       ENGINE_VERSION_MISMATCH: "The language-server version does not match the expected build.",
       TIMEOUT: "The language server could not initialize before the deadline.",
       LIMIT_EXCEEDED: "The input exceeds the supported size or file limit.",

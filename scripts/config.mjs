@@ -20,8 +20,17 @@ export async function loadConfig() {
   if (!local || typeof local !== "object")
     throw new Error("config.js must export a configuration object.");
   return {
-    engine: { ...defaults.engine, ...local.engine },
-    editors: { ...defaults.editors, ...local.editors },
+    engine: {
+      ...defaults.engine,
+      ...local.engine,
+      ...(process.env.DRYAS_LSP_PATH ? { lspPath: process.env.DRYAS_LSP_PATH } : {}),
+      ...(process.env.DRYAS_API_PATH ? { apiPath: process.env.DRYAS_API_PATH } : {}),
+    },
+    editors: {
+      ...defaults.editors,
+      ...local.editors,
+      ...(process.env.DRYAS_VSCODE_PATH ? { vscode: process.env.DRYAS_VSCODE_PATH } : {}),
+    },
     tests: { ...defaults.tests, ...local.tests },
   };
 }

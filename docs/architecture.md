@@ -141,6 +141,16 @@ References: [VS Code LSP guide](https://code.visualstudio.com/api/language-exten
 
 The current selection is listed in [Language engine](language-engine.md).
 
+## Packaged runtime
+
+The platform-specific VSIX includes the selected LSP and model-API programs under
+`runtime/<platform>-<arch>/`. Default paths are resolved from the extension installation;
+explicit settings and development overrides remain available. The portable Skill carries
+its own copy of the same runtime and uses relative locations after relocation.
+Packaging retains native and standard-library notices, dependency license texts and selected
+source, and checks version/revision, trimmed build paths and archive host-information leakage.
+Local engine configuration and source maps are excluded from distributed packages.
+
 ## Diagnostic observations
 
 The current-window Copilot tool reads the existing Problems collection, including unsaved
@@ -148,6 +158,8 @@ buffers and disconnected-project diagnostics. It returns `observation: "editor"`
 language-service connection states. It never starts a validation request.
 The separate `dryas-lsp-diagnostics` command returns `observation: "lsp-recompute"`, starts
 its own LSP process and reads saved project/reference files, with an optional in-memory overlay.
+The command resolves explicit `--project` before working-directory discovery and includes the
+resolved project context. `--context` reads that scope without starting an engine.
 Both use 1-based UTF-16 positions. The command's 500 ms quiet period only sets `settled`;
 index completion remains unconfirmed. Neither result is the model API's saved-project
 `validate` result. See [the command usage](../README.md#diagnostic-observations-for-agents).

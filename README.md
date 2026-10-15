@@ -25,6 +25,7 @@ automatically executed from an opened model project.
 
 ```sh
 npm run check
+node scripts/build-engine.mjs
 npm run package:vsix
 ```
 
@@ -34,24 +35,25 @@ See [Language engine](docs/language-engine.md) for the current selection.
 
 ## Language engine
 
-[config/engine.json](config/engine.json) records the development engine version and
-source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
-it does not bundle the engine or its standard library.
+[config/engine.json](config/engine.json) records the selected engine version and source commit.
+The platform-specific VSIX bundles matching `sysml-lsp` and `sysml-grpc` programs in
+`runtime/<platform>-<arch>/`. The engine's embedded standard library is included with
+those programs. The extension resolves these package-relative paths at runtime;
+fresh installations need no executable path settings or separate engine download.
 
-Version 0.1.22 uses `v0.9.2-dryas.6`. Selected completion details show the native
-declaration, reference spelling, actual declaration origin, source filename and
-complete `doc`. Update the VSIX and both external executables together. If you
-set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.6` too.
-With the build toolchain required by the configured language engine installed, run:
+Version 0.1.26 uses `v0.9.2-dryas.6`. Selected completion details show the native
+declaration, reference spelling, actual declaration origin, source filename and complete `doc`.
+Explicit `dryas.lspPath`, `dryas.apiPath` and development environment overrides remain supported.
+Clear old path overrides to use the bundled runtime. An explicit `dryas.expectedEngineVersion`
+must match the selected build. Keep machine-specific settings out of committed project files.
 
-```sh
-node scripts/build-engine.mjs
-```
-
-The script retrieves and builds the selected maintained version in an ignored
-directory and preserves an existing `config.js`. After installing the VSIX, set
-`dryas.lspPath` and `dryas.apiPath` in the editor's **User Settings**, or put the
-executables on PATH. Do not commit machine paths in workspace settings.
+Development packaging requires the configured engine build and its Go module cache.
+`node scripts/build-engine.mjs` prepares the ignored `.engine-ci` checkout and executables.
+`npm run package:vsix` stages the runtime, preserves licenses and source, checks version/revision
+and `-trimpath`, and writes both VSIX and a self-contained Skill ZIP to `artifacts/`.
+A prepared engine distribution with matching programs, notices and `source.zip` can be supplied
+with `npm run package:vsix -- --engine-dir <distribution-folder>`.
+Both archives are checked for local host paths and identifiers, including their nested source archive.
 
 ## Work with a project
 
@@ -134,8 +136,9 @@ First-party DRYAS code uses the [Apache License 2.0](LICENSE).
 `SPDX-License-Identifier: Apache-2.0` identifies a source file's license. The build
 generates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) from the JavaScript
 dependencies actually bundled and includes licenses and notices in the VSIX.
-Licensing and release inventories for the external language engine and its standard
-library are managed separately.
+Native engine, standard-library, Go and dependency notices are included in `runtime/licenses/`.
+The selected engine source is included in `runtime/source/source.zip`; `runtime/manifest.json`
+records the version, source revision, relative executable locations and binary hashes.
 
 ## Projects
 
@@ -281,25 +284,36 @@ and library markers. Each project's existing connection state includes
 `index: "unconfirmed"`. Disconnection does not discard the current collection or make
 this read fail. An empty collection says nothing about checking completeness.
 The tool does not save files, trigger validation or connect to another window.
+Diagnostic source, tags and related information are retained from all SysML/KerML providers.
 
-For an independent observation, build the repository and run:
+For an independent observation, use the complete Skill directory included in the VSIX or
+extract the portable Skill ZIP. It includes both scripts and the matching native runtime:
 
 ```sh
-npm exec -- dryas-lsp-diagnostics --project <project-folder>
+node <skill-directory>/scripts/run-diagnostics.cjs --project <project-folder>
 ```
 
-The installed extension also includes the standalone command at `dist/lsp-diagnostics.cjs`.
-Its self-contained skill is in `skills/sysml-diagnostics`; copy that whole folder to a
-skill directory supported by your agent. The skill includes `scripts/diagnostics.cjs`,
-which can be run with Node.js without VS Code or the product repository.
+A known project folder works without configuration; use `--project .` when it is the intended
+working directory. Otherwise `--context` searches the working directory and its ancestors
+for `.systrace/project.json`, or legacy `.vscode/settings.json` containing `dryas.modelRoots`.
+It reads project scope without starting an engine. Missing project configuration requests an
+explicit root rather than scanning sibling folders. Results include the resolved `project` context.
+This does not identify VS Code's active project.
 
-The command returns `observation: "lsp-recompute"` and reads all saved SysML/KerML sources
-in the configured project and its declared references. It checks the engine version and
-uses the provider's normal LSP launch arguments. `--lsp` defaults to `sysml-lsp` on PATH;
-`--expected-version` defaults to the selected engine build. User-level settings and
-machine paths are not read. Source folder precedence is explicit `--model-root`, then
-`.systrace/project.json`, then project-local `.vscode/settings.json` (`dryas.modelRoots`),
-then `["."]`. Explicit roots affect only the consuming project; references retain their own scope.
+The launcher uses a package-relative runtime by default; `--engine-context` shows its selection.
+Explicit `--lsp`, `SYSML_LSP_PATH` and the launcher's local configuration remain advanced overrides.
+Without a bundle, 0.1.26's bounded editor-settings and PATH discovery remain available.
+Local `engine.local.json` is never included in a distributed archive. For a portable or remote
+agent, use the package for that environment; a host executable is usable only when accessible
+and compatible. No drive or extension-installation scan is performed.
+
+The diagnostic result uses `observation: "lsp-recompute"` and loads all saved sources in the
+project and declared reference scope. Source-folder precedence is explicit `--model-root`,
+then `.systrace/project.json`, project-local `dryas.modelRoots`, then `["."]`.
+Explicit roots affect only the main project. Engine version checking still happens before LSP.
+The underlying `diagnostics.cjs` / `dryas-lsp-diagnostics` command accepts an explicit engine
+path or PATH; the launcher supplies the bundled choice. Retain stdout JSON for counting,
+grouping and reporting instead of repeating unchanged diagnostic inputs.
 
 `--path <relative-path>` filters printed diagnostics only. Repeat `--path` or `--model-root`
 for multiple entries. `--overlay <relative-file>` reads UTF-8 from stdin and replaces that

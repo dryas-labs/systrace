@@ -2,29 +2,28 @@
 
 [English](README.md) | **简体中文**
 
-面向 VS Code 和 Cursor 的 SysML v2 编辑扩展，由外部 language engine（语言引擎）提供语言能力。
+面向 VS Code 和 Cursor 的 SysML v2 编辑扩展，由随包提供、独立进程运行的 language engine（语言引擎）提供语言能力。
 当前是早期开发版，尚未实现 view 渲染和内置 agent。
 
-0.1.22 使用 language engine 构建 `v0.9.2-dryas.6`。选中补全候选后，详情显示原生声明、引用名称、
+0.1.26 使用 language engine 构建 `v0.9.2-dryas.6`。选中补全候选后，详情显示原生声明、引用名称、
 实际声明来源、源文件名和完整文档。说明按需加载，与普通悬浮共用引擎的文档提取逻辑。
 别名保留原来的插入名称；没有文档的元素只显示声明和来源。
 点击详情箭头，或在补全列表已打开时按 Ctrl+Space，可展开编辑器原生的详情面板。
-升级时请同时更新两个外部引擎程序；若显式设置过 `dryas.expectedEngineVersion`，
+VSIX 已包含匹配的两个引擎程序；若显式设置过 `dryas.expectedEngineVersion`，
 请改为 `v0.9.2-dryas.6`。
 
 当前引擎选择见 [Language engine](../../docs/language-engine.zh-Hans.md)。
 
 ## 开始使用
 
-1. 按仓库 `config/engine.json` 中记录的版本构建 language engine。
-2. 将 `sysml-lsp` 和 `sysml-grpc` 加入 PATH，或在编辑器的 **User Settings** 中设置
-   **DRYAS: Lsp Path** 和 **DRYAS: Api Path**。不要把本机路径写入提交的工作区设置。
-3. 打开可信的项目文件夹，在项目根目录或子目录中放置 SysML/KerML 文件，或通过
-   **Configure Model Source Folders** 指定项目源码文件夹。
-4. 打开 `.sysml` 文件，即可使用诊断、补全、悬浮提示和定义跳转。
+1. 安装对应操作系统和架构的 VSIX；其中包含匹配的语言引擎和内置标准库，无需配置程序路径。
+2. 打开可信项目，在根目录或子目录放置 SysML/KerML 文件，或使用 **Configure Model Source Folders**。
+3. 打开 `.sysml` 文件，即可使用诊断、补全、悬浮提示和定义跳转。
 
-此 VSIX 不包含引擎及其标准库。模型文件夹中的文件必须是可读取的 UTF-8 文件；
+显式 **DRYAS: Lsp Path** 和 **DRYAS: Api Path** 继续作为覆盖项，清空它们即可使用包内默认值。
+分发包记录相对位置，不携带本机配置。模型源码必须是可读取的 UTF-8 文件；
 当前版本拒绝符号链接和 junction。隐藏目录和 `node_modules` 不参与扫描，可配置更窄的源码范围。
+原生引擎许可证、依赖声明和对应源码均保存在 `runtime/` 下。
 
 如果启动报告模型目录无效，使用 **Configure Model Source Folders** 或检查
 `.systrace/project.json` 中的 `modelRoots`。默认 `["."]` 扫描项目根目录，显式目录均相对项目根目录。
@@ -174,23 +173,31 @@ Copilot 可使用 **Systrace: Current Window Problems**（`#systraceProblems`，
 `observation: "editor"`，包含所有严重度、未保存文档及库文件标记。每个项目附带现有连接状态和
 `index: "unconfirmed"`。语言服务断开时仍返回现有集合，本次读取不因此失败。空列表不表示检查完整。
 工具不会保存文件、触发重算或连接其他窗口。
+结果保留所有 SysML/KerML 诊断提供者的来源、诊断标签和关联信息。
 
-需要独立观察时，构建仓库后运行：
+独立观察可使用 VSIX 中的完整 Skill 目录，或解压独立 Skill ZIP；其中包含两个脚本和匹配的原生引擎：
 
 ```sh
-npm exec -- dryas-lsp-diagnostics --project <项目文件夹>
+node <skill-directory>/scripts/run-diagnostics.cjs --project <项目文件夹>
 ```
 
-安装后的扩展在 `dist/lsp-diagnostics.cjs` 中包含独立命令。配套的完整 Skill 位于
-`skills/sysml-diagnostics`，可将整个目录复制到目标 Agent 支持的 Skill 目录。
-其中的 `scripts/diagnostics.cjs` 可通过 Node.js 执行，不依赖 VS Code 或产品源码仓库。
+已知项目目录直接传入 `--project`，即使没有配置文件也可使用；当前目录就是目标时用 `--project .`。
+需要查看范围时才使用 `--context`，它从工作目录向上查找 `.systrace/project.json`，
+或包含 `dryas.modelRoots` 的旧版 `.vscode/settings.json`，不启动引擎。
+找不到配置时明确提供根目录，不扩大扫描其他项目。诊断结果附带解析后的 `project` 上下文，
+这不表示连接或识别了 VS Code 当前激活项目。
 
-命令返回 `observation: "lsp-recompute"`，加载当前项目及其引用项目配置范围内的所有已保存
-SysML/KerML 文件，使用语言服务描述中的启动参数并先检查版本。`--lsp` 默认使用 PATH 中的
-`sysml-lsp`；`--expected-version` 默认使用当前选定构建。不读取用户级设置或其中的机器路径。
-源码目录优先级为显式 `--model-root`、`.systrace/project.json`、项目自己的
-`.vscode/settings.json` 中的 `dryas.modelRoots`，最后默认 `["."]`。
-显式目录只覆盖当前项目，引用项目仍使用各自的配置范围。
+启动器默认使用包内相对位置的 runtime；`--engine-context` 可查看选择结果。
+显式 `--lsp`、`SYSML_LSP_PATH` 和本地配置保留为高级覆盖项。
+缺少包内引擎时，仍支持 0.1.26 的有限编辑器设置与 PATH 查找。
+本地 `engine.local.json` 不进入分发包。远程或容器 Agent 应使用其运行环境对应的程序，
+宿主机程序只有在可访问且兼容时才能使用；不会全盘扫描或遍历扩展安装目录。
+
+结果使用 `observation: "lsp-recompute"`，加载项目及声明引用范围内的所有已保存源码。
+源码目录优先级为显式 `--model-root`、`.systrace/project.json`、项目自己的 `dryas.modelRoots`，
+最后为 `["."]`。显式目录只覆盖当前项目。LSP 启动前仍检查引擎版本。
+底层 `diagnostics.cjs` / `dryas-lsp-diagnostics` 接收显式引擎路径或 PATH；启动器负责传入包内选择。
+保留并复用 stdout JSON 来计数、归类和报告，避免为相同输入重复诊断。
 
 `--path <相对路径>` 只筛选打印的诊断，不缩小加载范围。`--path` 和 `--model-root` 均可重复传入。
 `--overlay <相对文件>` 从标准输入读取 UTF-8 文本，仅在本次 LSP 会话中替换当前项目范围内一个已有文件，

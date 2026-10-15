@@ -11,11 +11,11 @@
     }
   },
   "dependencies": {
-    "jsonc-parser": "3.3.1",
     "vscode-jsonrpc": "9.0.3",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "jsonc-parser": "3.3.1"
   },
   "bin": {
-    "dryas-lsp-diagnostics": "bin/dryas-lsp-diagnostics.cjs"
+    "dryas-lsp-diagnostics": "./bin/dryas-lsp-diagnostics.cjs"
   }
 }

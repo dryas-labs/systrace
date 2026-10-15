@@ -15,3 +15,4 @@ packages/extension/THIRD_PARTY_NOTICES.md
 .engine-ci/
 
 packages/extension/skills/
+packages/extension/runtime/

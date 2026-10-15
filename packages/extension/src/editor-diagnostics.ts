@@ -42,6 +42,27 @@ export function observeEditorDiagnostics(
         diagnostics: diagnostics.map((diagnostic) => ({
           severity: (["error", "warning", "information", "hint"] as const)[diagnostic.severity],
           message: diagnostic.message,
+          ...(diagnostic.tags ? { tags: [...diagnostic.tags] } : {}),
+          ...(diagnostic.relatedInformation
+            ? {
+                relatedInformation: diagnostic.relatedInformation.map((information) => ({
+                  message: information.message,
+                  location: {
+                    uri: information.location.uri.toString(),
+                    range: {
+                      start: {
+                        line: information.location.range.start.line + 1,
+                        column: information.location.range.start.character + 1,
+                      },
+                      end: {
+                        line: information.location.range.end.line + 1,
+                        column: information.location.range.end.character + 1,
+                      },
+                    },
+                  },
+                })),
+              }
+            : {}),
           range: {
             start: {
               line: diagnostic.range.start.line + 1,
@@ -64,6 +85,8 @@ export function observeEditorDiagnostics(
   });
   return {
     observation: "editor" as const,
+    scope: "all-providers-sysml-kerml" as const,
+    index: "unconfirmed" as const,
     positionEncoding: "utf-16" as const,
     positionBase: 1 as const,
     projects: projects.map((project) => ({ ...project, index: "unconfirmed" as const })),

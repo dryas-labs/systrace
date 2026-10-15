@@ -67,6 +67,12 @@ it("collects UTF-16 diagnostics and counts empty publications while path filters
     { file: "two.kerml", received: true },
   ]);
   expect(answer.result.diagnostics[0].range.start).toEqual({ line: 1, column: 4 });
+  expect(answer.result.diagnostics[0]).toMatchObject({
+    tags: [1, 2],
+    relatedInformation: [
+      { message: "Related", location: { range: { start: { line: 1, column: 4 } } } },
+    ],
+  });
   const filtered = await run(["--path", "two.kerml"]);
   expect(filtered.result.files).toHaveLength(2);
   expect(filtered.result.diagnostics).toEqual([]);
@@ -113,4 +119,24 @@ it("uses shared roots and references, with explicit roots overriding only the ma
   } finally {
     await rm(reference, { recursive: true, force: true });
   }
+});
+
+it("reports a missing language server with explicit path guidance instead of a generic failure", async () => {
+  const answer = await run(["--lsp", join(root, "missing-sysml-lsp")]);
+  expect(answer.code).toBe(1);
+  expect(answer.result).toBeUndefined();
+  expect(answer.stderr).toContain("ENGINE_NOT_FOUND");
+  expect(answer.stderr).toContain("--lsp");
+  expect(answer.stderr).toContain("PATH");
+  expect(answer.stderr).not.toContain(root);
+});
+
+it.each([
+  ["handshake-timeout", "TIMEOUT"],
+  ["malformed", "ENGINE_PROTOCOL_ERROR"],
+])("fails %s rather than reporting a successful partial observation", async (mode, error) => {
+  const answer = await run(["--timeout-ms", "1200"], "", mode);
+  expect(answer.code).toBe(1);
+  expect(answer.result).toBeUndefined();
+  expect(answer.stderr).toContain(error);
 });

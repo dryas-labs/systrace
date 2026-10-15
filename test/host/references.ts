@@ -2,6 +2,7 @@
 import * as vscode from "vscode";
 import assert from "node:assert/strict";
 import { ProjectSession } from "@dryas/engine-adapter";
+import { engineExecutable } from "../../packages/extension/src/engine-paths.js";
 import type { Projects } from "../../packages/extension/src/projects.js";
 import type { ContentNode, ProjectNode } from "../../packages/extension/src/project-tree.js";
 
@@ -97,7 +98,14 @@ export async function run(): Promise<void> {
   const settings = vscode.workspace.getConfiguration("dryas", a.uri);
   const session = new ProjectSession({
     projectRoot: a.uri.fsPath,
-    engine: { executable: settings.get<string>("apiPath")! },
+    engine: {
+      executable: engineExecutable(
+        "sysml-grpc",
+        extension.extensionPath,
+        settings.get<string>("apiPath"),
+        process.env.DRYAS_API_PATH,
+      ),
+    },
   });
   type Report = {
     project: { errors: number };

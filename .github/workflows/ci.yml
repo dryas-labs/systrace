@@ -60,10 +60,12 @@ jobs:
       - name: Test project references on Windows
         if: runner.os == 'Windows'
         run: npm run test:host -- --references --vsix
-      - name: Upload VSIX
+      - name: Upload packaged runtime and Skill
         uses: actions/upload-artifact@v7.0.2
         with:
           name: systrace-vsix-${{ matrix.os }}
-          path: artifacts/*.vsix
+          path: |
+            artifacts/*.vsix
+            artifacts/systrace-diagnostics-skill-*.zip
           if-no-files-found: error
           retention-days: 14

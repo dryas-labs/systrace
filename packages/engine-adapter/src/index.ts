@@ -66,3 +66,6 @@ export {
 
 export { verifyLanguageServiceVersion } from "./lsp-version.js";
 export { observeLspDiagnostics, type LspDiagnosticsOptions } from "./lsp-diagnostics.js";
+
+export { runDiagnosticsCommand } from "./diagnostics-command.js";
+export { resolveDiagnosticsProject } from "./diagnostics-project.js";

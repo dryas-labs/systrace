@@ -93,17 +93,21 @@ if (referenceChecks) {
 const env = {
   ...process.env,
 };
-// Exercise the same User Settings path as a manually installed VSIX, without
-// development environment variables silently fixing a missing setting.
+// A packaged extension must start with empty User Settings and no development
+// engine variables. Source-host checks may use the ignored development config.
 delete env.DRYAS_LSP_PATH;
 delete env.DRYAS_API_PATH;
 await mkdir(resolve(workspace, "profile/User"), { recursive: true });
 await writeFile(
   resolve(workspace, "profile/User/settings.json"),
-  JSON.stringify({
-    "dryas.lspPath": config.engine.lspPath,
-    "dryas.apiPath": config.engine.apiPath,
-  }),
+  JSON.stringify(
+    process.argv.includes("--vsix") || process.argv.includes("--bundled")
+      ? {}
+      : {
+          "dryas.lspPath": config.engine.lspPath,
+          "dryas.apiPath": config.engine.apiPath,
+        },
+  ),
 );
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.VSCODE_IPC_HOOK_CLI;

@@ -25,6 +25,17 @@ it("reads all severities and unsaved/library documents without requiring a conne
   const diagnostics = [0, 1, 2, 3].map((severity) => ({
     severity,
     message: "Observation",
+    source: "another-provider",
+    tags: [1, 2],
+    relatedInformation: [
+      {
+        message: "Related",
+        location: {
+          uri: saved,
+          range: { start: { line: 1, character: 3 }, end: { line: 1, character: 4 } },
+        },
+      },
+    ],
     range: { start: { line: 0, character: 3 }, end: { line: 0, character: 4 } },
   }));
   host.diagnostics = [
@@ -51,6 +62,17 @@ it("reads all severities and unsaved/library documents without requiring a conne
     "hint",
   ]);
   expect(result.files[0]!.diagnostics[0]!.range.start).toEqual({ line: 1, column: 4 });
+  expect(result.scope).toBe("all-providers-sysml-kerml");
+  expect(result.files[0]!.diagnostics[0]).toMatchObject({
+    source: "another-provider",
+    tags: [1, 2],
+    relatedInformation: [
+      {
+        message: "Related",
+        location: { uri: saved.toString(), range: { start: { line: 2, column: 4 } } },
+      },
+    ],
+  });
 });
 it("reports an empty collection as an editor observation, not clean validation", () => {
   host.diagnostics = [];

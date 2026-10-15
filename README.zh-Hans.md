@@ -22,6 +22,7 @@ npm run config:init
 
 ```sh
 npm run check
+node scripts/build-engine.mjs
 npm run package:vsix
 ```
 
@@ -31,20 +32,21 @@ VSIX 输出在 `artifacts/`。在 VS Code 或 Cursor 中执行 **Extensions: Ins
 
 ## Language engine
 
-[config/engine.json](config/engine.json) 记录开发引擎的版本和源码提交。
-本版 VSIX 使用外部的 `sysml-lsp` 与 `sysml-grpc`，不包含引擎二进制或标准库。
-0.1.22 使用 `v0.9.2-dryas.6`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
-源文件名和完整的 `doc`。升级时需要同时更新 VSIX 和两个外部引擎程序；如果手动填写过
-`dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.6`。
-安装所配置 language engine 需要的构建工具链后，可以运行：
+[config/engine.json](config/engine.json) 记录选定引擎版本和源码提交。
+按平台打包的 VSIX 在 `runtime/<platform>-<arch>/` 中附带匹配的 `sysml-lsp` 和
+`sysml-grpc`，标准库由这些程序内置。扩展运行时根据安装目录解析包内相对路径；
+全新安装无需填写引擎路径或另外下载引擎。
 
-```sh
-node scripts/build-engine.mjs
-```
+0.1.26 使用 `v0.9.2-dryas.6`：补全详情显示原生声明、引用名称、实际声明来源、源文件名和完整 `doc`。
+显式 `dryas.lspPath`、`dryas.apiPath` 及开发环境变量继续作为覆盖项；清空旧路径覆盖即可使用包内引擎。
+显式填写的 `dryas.expectedEngineVersion` 仍需与选定版本一致。不要把本机配置写入提交的项目文件。
 
-脚本在忽略目录中获取并构建已指定的维护版本；已有的 `config.js` 会保留。
-安装 VSIX 后，在编辑器的 **User Settings** 设置 `dryas.lspPath` 和 `dryas.apiPath`，
-或将对应程序放进 PATH。不要把本机路径写入提交的工作区设置。
+开发打包需要选定引擎构建及其 Go 模块缓存。`node scripts/build-engine.mjs` 准备忽略目录
+`.engine-ci` 中的源码和程序。`npm run package:vsix` 校验版本、提交和 `-trimpath`，
+保留许可证与源码，并向 `artifacts/` 输出 VSIX 和完整独立 Skill ZIP。
+已有程序、声明及 `source.zip` 的引擎分发目录可通过
+`npm run package:vsix -- --engine-dir <分发目录>` 指定。
+两个分发包都检查本机路径和标识，包含其嵌套源码压缩包。
 
 ## 项目使用
 
@@ -111,7 +113,8 @@ GitHub Actions 会在 PR 和推送到 `main` 时，在 Windows 与 Linux 上执�
 DRYAS 自有代码采用 [Apache License 2.0](LICENSE)。源码中的
 `SPDX-License-Identifier: Apache-2.0` 标记该文件的许可证。
 构建根据实际打包的 JavaScript 依赖生成 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
-并将许可证与声明放入 VSIX。外部 language engine 及其标准库的许可证与发布清单另行管理。
+并将许可证与声明放入 VSIX。原生引擎、标准库、Go 及其依赖的声明保存在 `runtime/licenses/`；
+对应引擎源码在 `runtime/source/source.zip`，`runtime/manifest.json` 记录版本、源码提交、相对程序位置和校验值。
 
 ## 项目管理
 
@@ -223,23 +226,31 @@ Copilot 可使用 **Systrace: Current Window Problems**（`#systraceProblems`，
 `observation: "editor"`，包含所有严重度、未保存文档及库文件标记。每个项目附带现有连接状态和
 `index: "unconfirmed"`。语言服务断开时仍返回现有集合，本次读取不因此失败。空列表不表示检查完整。
 工具不会保存文件、触发重算或连接其他窗口。
+结果保留所有 SysML/KerML 诊断提供者的来源、诊断标签和关联信息。
 
-需要独立观察时，构建仓库后运行：
+独立观察可使用 VSIX 中的完整 Skill 目录，或解压独立 Skill ZIP；其中包含两个脚本和匹配的原生引擎：
 
 ```sh
-npm exec -- dryas-lsp-diagnostics --project <项目文件夹>
+node <skill-directory>/scripts/run-diagnostics.cjs --project <项目文件夹>
 ```
 
-安装后的扩展在 `dist/lsp-diagnostics.cjs` 中包含独立命令。配套的完整 Skill 位于
-`skills/sysml-diagnostics`，可将整个目录复制到目标 Agent 支持的 Skill 目录。
-其中的 `scripts/diagnostics.cjs` 可通过 Node.js 执行，不依赖 VS Code 或产品源码仓库。
+已知项目目录直接传入 `--project`，即使没有配置文件也可使用；当前目录就是目标时用 `--project .`。
+需要查看范围时才使用 `--context`，它从工作目录向上查找 `.systrace/project.json`，
+或包含 `dryas.modelRoots` 的旧版 `.vscode/settings.json`，不启动引擎。
+找不到配置时明确提供根目录，不扩大扫描其他项目。诊断结果附带解析后的 `project` 上下文，
+这不表示连接或识别了 VS Code 当前激活项目。
 
-命令返回 `observation: "lsp-recompute"`，加载当前项目及其引用项目配置范围内的所有已保存
-SysML/KerML 文件，使用语言服务描述中的启动参数并先检查版本。`--lsp` 默认使用 PATH 中的
-`sysml-lsp`；`--expected-version` 默认使用当前选定构建。不读取用户级设置或其中的机器路径。
-源码目录优先级为显式 `--model-root`、`.systrace/project.json`、项目自己的
-`.vscode/settings.json` 中的 `dryas.modelRoots`，最后默认 `["."]`。
-显式目录只覆盖当前项目，引用项目仍使用各自的配置范围。
+启动器默认使用包内相对位置的 runtime；`--engine-context` 可查看选择结果。
+显式 `--lsp`、`SYSML_LSP_PATH` 和本地配置保留为高级覆盖项。
+缺少包内引擎时，仍支持 0.1.26 的有限编辑器设置与 PATH 查找。
+本地 `engine.local.json` 不进入分发包。远程或容器 Agent 应使用其运行环境对应的程序，
+宿主机程序只有在可访问且兼容时才能使用；不会全盘扫描或遍历扩展安装目录。
+
+结果使用 `observation: "lsp-recompute"`，加载项目及声明引用范围内的所有已保存源码。
+源码目录优先级为显式 `--model-root`、`.systrace/project.json`、项目自己的 `dryas.modelRoots`，
+最后为 `["."]`。显式目录只覆盖当前项目。LSP 启动前仍检查引擎版本。
+底层 `diagnostics.cjs` / `dryas-lsp-diagnostics` 接收显式引擎路径或 PATH；启动器负责传入包内选择。
+保留并复用 stdout JSON 来计数、归类和报告，避免为相同输入重复诊断。
 
 `--path <相对路径>` 只筛选打印的诊断，不缩小加载范围。`--path` 和 `--model-root` 均可重复传入。
 `--overlay <相对文件>` 从标准输入读取 UTF-8 文本，仅在本次 LSP 会话中替换当前项目范围内一个已有文件，
