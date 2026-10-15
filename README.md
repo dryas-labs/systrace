@@ -35,13 +35,12 @@ See [Language engine](docs/language-engine.md) for the current selection.
 ## Language engine
 
 [config/engine.json](config/engine.json) records the development engine version and
-source commit. This VSIX uses external `sysml-lsp` and `sysml-grpc` executables;
-it does not bundle the engine or its standard library.
+source commit. This platform-specific VSIX bundles `sysml-lsp`, `sysml-grpc`, their standard library, license notices and corresponding engine source.
 
-Version 0.1.5 uses `v0.9.2-dryas.4`. Selected completion details show the native
+Version 0.1.26 uses `v0.9.2-dryas.6`. Selected completion details show the native
 declaration, reference spelling, actual declaration origin, source filename and
-complete `doc`. Update the VSIX and both external executables together. If you
-set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.4` too.
+complete `doc`. The VSIX includes matching engine executables. Update explicit overrides together. If you
+set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.6` too.
 With the build toolchain required by the configured language engine installed, run:
 
 ```sh
@@ -136,5 +135,23 @@ First-party DRYAS code uses the [Apache License 2.0](LICENSE).
 `SPDX-License-Identifier: Apache-2.0` identifies a source file's license. The build
 generates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) from the JavaScript
 dependencies actually bundled and includes licenses and notices in the VSIX.
-Licensing and release inventories for the external language engine and its standard
+Licensing and release inventories for the bundled language engine and its standard
 library are managed separately.
+
+## Agent diagnostics
+
+In VS Code Chat, use `#systraceProblems` (`dryas_editor_diagnostics`) to read this window's existing SysML/KerML Problems, including unsaved edits, related information and diagnostic tags. Results include all diagnostic providers and retain each diagnostic's source. Connection state is reported per workspace; disconnected services can leave stale Problems. `observation: "editor"` and `index: "unconfirmed"` describe an observation, not complete validation.
+
+For an external agent, use the portable `sysml-diagnostics` Skill. Its launcher starts an independent language-server process against saved files:
+
+```sh
+node <skill-directory>/scripts/run-diagnostics.cjs --project <model-folder>
+```
+
+The adapter also exposes `dryas-lsp-diagnostics --project <model-folder> --lsp <executable>`. `--overlay <relative-existing-file>` accepts replacement UTF-8 text on stdin without writing it; `--path` filters output without narrowing loaded scope. An explicit project defaults to `["."]` unless project configuration specifies roots. Results use `observation: "lsp-recompute"` and 1-based UTF-16 positions. After initialization, an observation deadline returns partial results with `settled: false` and exit code 0. Missing engines, initialization failures, protocol errors and crashes fail with a nonzero exit code. Neither a quiet period nor an empty result proves complete checking. MCP `validate` continues to use the saved-project API.
+
+The Skill includes the platform-specific engine. Overrides are `--lsp`, `SYSML_LSP_PATH`, and local configuration; otherwise the launcher uses its bundle, editor user settings (`dryas.lspPath`), then PATH. `--engine-context` explains the selected source. `--configure-lsp <executable>` remembers a machine-local path; `--vscode-settings <settings.json>` selects a custom editor/profile. Multiple distinct editor paths require selection. A host executable must be accessible and runnable in the agent environment.
+
+Packaging produces matching `dryas-systrace-<version>.vsix` and `systrace-diagnostics-skill-<version>.zip` in `artifacts/`. Run `npm run package:vsix -- --engine-source <built-engine-checkout>` or supply `--engine-dir <prepared-distribution>`; by default the build uses `.engine-ci`. Packaging checks the engine version, source revision, licenses and private-path exclusions. Skill instructions and discovery live in `skills/sysml-diagnostics`; the diagnostic bundle is built from engine-adapter sources. Machine-local `engine.local.json` is excluded.
+
+Development checks accept `DRYAS_LSP_PATH`, `DRYAS_API_PATH` and `DRYAS_VSCODE_PATH` as local overrides. `npm run test:host -- --vsix --bundled` installs the package in an isolated editor profile with no engine path settings and invokes the diagnostic tool during an unsaved edit.

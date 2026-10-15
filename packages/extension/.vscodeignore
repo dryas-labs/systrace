@@ -8,3 +8,8 @@
 !dist/extension.cjs
 !dist/mcp.cjs
 **/*.map
+
+!dist/lsp-diagnostics.cjs
+!skills/**
+!runtime/**
+**/engine.local.json

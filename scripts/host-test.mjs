@@ -27,10 +27,14 @@ delete env.DRYAS_API_PATH;
 await mkdir(resolve(workspace, "profile/User"), { recursive: true });
 await writeFile(
   resolve(workspace, "profile/User/settings.json"),
-  JSON.stringify({
-    "dryas.lspPath": config.engine.lspPath,
-    "dryas.apiPath": config.engine.apiPath,
-  }),
+  JSON.stringify(
+    process.argv.includes("--bundled")
+      ? {}
+      : {
+          "dryas.lspPath": config.engine.lspPath,
+          "dryas.apiPath": config.engine.apiPath,
+        },
+  ),
 );
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.VSCODE_IPC_HOOK_CLI;

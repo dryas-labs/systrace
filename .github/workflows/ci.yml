@@ -44,14 +44,16 @@ jobs:
         run: npm run package:vsix
       - name: Test packaged extension on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run -a npm run test:host -- --vsix
+        run: xvfb-run -a npm run test:host -- --vsix --bundled
       - name: Test packaged extension on Windows
         if: runner.os == 'Windows'
-        run: npm run test:host -- --vsix
-      - name: Upload VSIX
+        run: npm run test:host -- --vsix --bundled
+      - name: Upload VSIX and portable Skill
         uses: actions/upload-artifact@v7.0.2
         with:
           name: systrace-vsix-${{ matrix.os }}
-          path: artifacts/*.vsix
+          path: |
+            artifacts/*.vsix
+            artifacts/systrace-diagnostics-skill-*.zip
           if-no-files-found: error
           retention-days: 14

@@ -1,6 +1,6 @@
 {
   "name": "dryas-systrace",
-  "version": "0.1.5",
+  "version": "0.1.26",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
@@ -41,6 +41,8 @@
     "prettier": "3.9.9",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.1",
-    "vitest": "5.0.3"
+    "vitest": "5.0.3",
+    "yazl": "2.5.1",
+    "yauzl": "3.4.0"
   }
 }

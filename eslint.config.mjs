@@ -15,9 +15,15 @@ export default [
       "coverage/**",
       "config.js",
       ".engine-ci/**",
+      "packages/extension/skills/**",
+      "packages/extension/runtime/**",
     ],
   },
   ...tseslint.configs.recommended,
+  {
+    files: ["skills/**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
   {
     files: ["**/*.ts"],
     rules: {

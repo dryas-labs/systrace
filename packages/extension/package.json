@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.5",
+  "version": "0.1.26",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -115,7 +115,7 @@
         },
         "dryas.expectedEngineVersion": {
           "type": "string",
-          "default": "v0.9.2-dryas.4",
+          "default": "v0.9.2-dryas.6",
           "scope": "resource",
           "description": "Required language engine build version, checked before use."
         },
@@ -128,7 +128,22 @@
           "description": "Deadline for a language engine request in milliseconds."
         }
       }
-    }
+    },
+    "languageModelTools": [
+      {
+        "name": "dryas_editor_diagnostics",
+        "displayName": "Systrace: Current Window Problems",
+        "toolReferenceName": "systraceProblems",
+        "canBeReferencedInPrompt": true,
+        "modelDescription": "Read current-window SysML/KerML Problems, including all severities, unsaved documents and library diagnostics. Returns observation editor and each project language-service connection state with index unconfirmed. Reads existing diagnostics even when disconnected. Does not run validation, save documents or connect to another window. An empty list is only an empty Problems snapshot, not evidence of complete checking.",
+        "userDescription": "Read SysML/KerML diagnostics already present in this window, without saving or rechecking files.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      }
+    ]
   },
   "dependencies": {
     "@dryas/engine-adapter": "0.1.0",

@@ -12,3 +12,6 @@ artifacts/
 *.local.json
 /config.js
 .engine-ci/
+
+/packages/extension/skills/
+/packages/extension/runtime/

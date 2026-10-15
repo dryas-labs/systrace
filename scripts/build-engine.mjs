@@ -36,7 +36,7 @@ for (const name of ["sysml-lsp", "sysml-grpc"]) {
     [
       "build",
       "-trimpath",
-      `-ldflags=-X main.Version=${manifest.version}`,
+      `-ldflags=-X main.Version=${manifest.version} -X main.Commit=${manifest.commit}`,
       "-o",
       output,
       `./cmd/${name}`,

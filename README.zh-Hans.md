@@ -32,10 +32,10 @@ VSIX 输出在 `artifacts/`。在 VS Code 或 Cursor 中执行 **Extensions: Ins
 ## Language engine
 
 [config/engine.json](config/engine.json) 记录开发引擎的版本和源码提交。
-本版 VSIX 使用外部的 `sysml-lsp` 与 `sysml-grpc`，不包含引擎二进制或标准库。
-0.1.5 使用 `v0.9.2-dryas.4`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
-源文件名和完整的 `doc`。升级时需要同时更新 VSIX 和两个外部引擎程序；如果手动填写过
-`dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.4`。
+本版 VSIX 内置当前平台的 `sysml-lsp`、`sysml-grpc`、标准库、许可证和对应引擎源码。
+0.1.26 使用 `v0.9.2-dryas.6`：选中补全候选后，详情显示原生声明、引用名称、实际声明来源、
+源文件名和完整的 `doc`。VSIX 内含匹配版本的引擎；如配置了外部引擎，需同时更新两个引擎程序；如果手动填写过
+`dryas.expectedEngineVersion`，也要改为 `v0.9.2-dryas.6`。
 安装所配置 language engine 需要的构建工具链后，可以运行：
 
 ```sh
@@ -113,3 +113,21 @@ DRYAS 自有代码采用 [Apache License 2.0](LICENSE)。源码中的
 `SPDX-License-Identifier: Apache-2.0` 标记该文件的许可证。
 构建根据实际打包的 JavaScript 依赖生成 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
 并将许可证与声明放入 VSIX。外部 language engine 及其标准库的许可证与发布清单另行管理。
+
+## Agent 诊断
+
+在 VS Code Chat 中使用 `#systraceProblems`（`dryas_editor_diagnostics`）读取当前窗口已有的 SysML/KerML 问题，包括未保存修改、关联信息和诊断标签。结果包含所有诊断提供者，并保留各条诊断的来源。按工作区报告连接状态；断连后问题面板可能残留旧诊断。`observation: "editor"` 和 `index: "unconfirmed"` 表示观察结果，不代表完整验证。
+
+外部 agent 使用便携 `sysml-diagnostics` 技能，其入口对已保存文件启动独立语言服务器：
+
+```sh
+node <技能目录>/scripts/run-diagnostics.cjs --project <模型目录>
+```
+
+适配器也提供 `dryas-lsp-diagnostics --project <模型目录> --lsp <可执行文件>`。`--overlay <已存在的相对文件路径>` 从标准输入读取 UTF-8 替换文本，不写入磁盘；`--path` 仅筛选输出，不缩小加载范围。显式项目在未配置模型目录时默认使用 `["."]`。结果标记为 `observation: "lsp-recompute"`，位置使用从 1 开始的 UTF-16 坐标。初始化成功后，观察超时返回部分结果、`settled: false` 和退出码 0；引擎缺失、初始化失败、协议错误及进程崩溃返回非零退出码。安静期或空结果不证明检查完整。MCP `validate` 继续使用已保存项目 API。
+
+技能内含当前平台的引擎。`--lsp`、`SYSML_LSP_PATH` 和本地配置优先；否则依次查找内置运行时、编辑器用户设置中的 `dryas.lspPath` 和 PATH。`--engine-context` 显示选中的来源；`--configure-lsp <可执行文件>` 保存本机配置；`--vscode-settings <settings.json>` 指定自定义编辑器或 Profile。多个编辑器配置不同路径时需要明确选择。引擎必须能在 agent 环境中访问并执行。
+
+打包在 `artifacts/` 生成同版本的 `dryas-systrace-<版本>.vsix` 和 `systrace-diagnostics-skill-<版本>.zip`。执行 `npm run package:vsix -- --engine-source <已构建引擎源码目录>`，或用 `--engine-dir <准备好的分发目录>`；默认使用 `.engine-ci`。打包校验引擎版本、源码提交、许可证和私人路径排除。技能说明与发现入口位于 `skills/sysml-diagnostics`，诊断脚本由 engine-adapter 源码构建。本机 `engine.local.json` 不进入产物。
+
+开发检查支持通过 `DRYAS_LSP_PATH`、`DRYAS_API_PATH` 和 `DRYAS_VSCODE_PATH` 设置本机覆盖路径。`npm run test:host -- --vsix --bundled` 在独立编辑器配置中安装产物，不设置引擎路径，并在未保存编辑期间调用诊断工具。

@@ -14,7 +14,7 @@ const rpc = createMessageConnection(
 const models = new Map();
 let sequence = 0;
 rpc.onRequest("GetServerInfo", () => ({
-  version: "v0.9.2-dryas.4",
+  version: "v0.9.2-dryas.6",
   capabilities: [
     "parse_sources",
     "strict_conformance",

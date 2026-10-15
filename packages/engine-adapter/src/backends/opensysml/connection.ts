@@ -11,7 +11,7 @@ import { z } from "zod";
 import type { EngineOptions } from "../../backend.js";
 import { AdapterError } from "../../errors.js";
 
-export const ENGINE_VERSION = "v0.9.2-dryas.4";
+export const ENGINE_VERSION = "v0.9.2-dryas.6";
 export const serverInfoSchema = z.object({
   version: z.string().min(1),
   capabilities: z.array(z.string()).default([]),

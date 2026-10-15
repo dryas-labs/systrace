@@ -78,10 +78,51 @@ export async function run(): Promise<void> {
     async () => vscode.languages.getDiagnostics(uri),
     (list) => list.some((d) => d.severity === vscode.DiagnosticSeverity.Error),
   );
+  assert(document.isDirty, "Diagnostic tool must observe an unsaved edit");
+  const readTool = async () => {
+    const result = await vscode.lm.invokeTool("dryas_editor_diagnostics", {
+      input: {},
+      toolInvocationToken: undefined,
+    });
+    const part = result.content.find((entry) => entry instanceof vscode.LanguageModelTextPart);
+    assert(part instanceof vscode.LanguageModelTextPart);
+    return JSON.parse(part.value) as {
+      observation: string;
+      index: string;
+      projects: { connection: string; index: string }[];
+      files: {
+        uri: string;
+        unsaved: boolean;
+        documentVersion?: number;
+        diagnostics: { severity: string; message: string }[];
+      }[];
+    };
+  };
+  const observed = await readTool();
+  assert.equal(observed.observation, "editor");
+  assert.equal(observed.index, "unconfirmed");
+  assert(
+    observed.projects.some(
+      (project) => project.connection === "connected" && project.index === "unconfirmed",
+    ),
+  );
+  const observedFile = observed.files.find((file) => file.uri === uri.toString());
+  assert(observedFile?.unsaved);
+  assert.equal(observedFile.documentVersion, document.version);
+  assert.deepEqual(
+    observedFile.diagnostics.map((entry) => entry.message),
+    vscode.languages.getDiagnostics(uri).map((entry) => entry.message),
+  );
   await vscode.commands.executeCommand("undo");
   await eventually(
     async () => vscode.languages.getDiagnostics(uri),
     (list) => !list.some((d) => d.severity === vscode.DiagnosticSeverity.Error),
+  );
+  const cleared = await readTool();
+  assert(
+    !cleared.files
+      .find((file) => file.uri === uri.toString())
+      ?.diagnostics.some((entry) => entry.severity === "error"),
   );
   const completionPosition = document.positionAt(
     document.getText().indexOf("Components::") + "Components::".length,

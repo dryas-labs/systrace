@@ -13,3 +13,6 @@ packages/extension/LICENSE
 packages/extension/THIRD_PARTY_NOTICES.md
 /config.js
 .engine-ci/
+
+packages/extension/skills/
+packages/extension/runtime/

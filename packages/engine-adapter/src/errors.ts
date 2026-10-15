@@ -16,6 +16,7 @@ export type ErrorCode =
   | "QUEUE_FULL"
   | "INVALID_PATH"
   | "EMPTY_PROJECT"
+  | "PROJECT_NOT_FOUND"
   | "PROJECT_CHANGED"
   | "STALE_CURSOR"
   | "STALE_MODEL"

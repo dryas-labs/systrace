@@ -40,6 +40,7 @@ vi.mock("vscode", () => {
   };
   return {
     Uri: { file: host.uri },
+    lm: { registerTool: () => ({ dispose() {} }) },
     RelativePattern: class {},
     StatusBarAlignment: { Left: 1 },
     window: {

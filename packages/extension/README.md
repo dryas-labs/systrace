@@ -2,30 +2,29 @@
 
 **English** | [简体中文](README.zh-Hans.md)
 
-SysML v2 editing for VS Code and Cursor, powered by an external language engine.
+SysML v2 editing for VS Code and Cursor, powered by a bundled language engine.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.5 uses language engine build `v0.9.2-dryas.4`. Selected completion details show
+Version 0.1.26 uses language engine build `v0.9.2-dryas.6`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
 spelling; undocumented elements show their declaration and source only.
 Use the details arrow, or Ctrl+Space while the suggestion list is open, to expand
-the editor's native detail panel. Update both external engine executables; if
-you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.4`.
+the editor's native detail panel. Update explicitly configured engine executables; if
+you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.6`.
 
 See [Language engine](../../docs/language-engine.md) for the current selection.
 
 ## Getting started
 
-1. Build the configured language engine version described in the repository's `config/engine.json`.
-2. Put `sysml-lsp` and `sysml-grpc` on PATH, or set **DRYAS: Lsp Path** and
-   **DRYAS: Api Path** in your editor's **User Settings**. Keep machine paths out of committed workspace settings.
+1. Install the VSIX matching your operating system and architecture; it includes the language engine.
+2. To override the bundled engine, set **DRYAS: Lsp Path** and **DRYAS: Api Path** in **User Settings**. Keep machine paths out of committed workspace settings.
 3. Open a trusted project folder with SysML/KerML files under `model/`, or configure
    **DRYAS: Model Roots** with the project's source folders.
 4. Open a `.sysml` file for diagnostics, completion, hover and definition navigation.
 
-The engine and its standard library are not bundled in this VSIX. Model folders
+The engine and its standard library are bundled for the package target platform. Model folders
 must contain readable UTF-8 files; symbolic links/junctions are refused in this slice.
 Local `selection/` and `designs/` archives must stay outside the configured source folders.
 
@@ -91,3 +90,17 @@ validity, task correctness or engineering correctness.
 DRYAS code is licensed under Apache-2.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 for the license text and the notices for bundled JavaScript dependencies.
 Legal texts and third-party notices retain their original wording.
+
+## Agent diagnostics
+
+In VS Code Chat, use `#systraceProblems` (`dryas_editor_diagnostics`) to read this window's existing SysML/KerML Problems, including unsaved edits, related information and diagnostic tags. Results include all diagnostic providers and retain each diagnostic's source. Connection state is reported per workspace; disconnected services can leave stale Problems. `observation: "editor"` and `index: "unconfirmed"` describe an observation, not complete validation.
+
+For an external agent, use the portable `sysml-diagnostics` Skill. Its launcher starts an independent language-server process against saved files:
+
+```sh
+node <skill-directory>/scripts/run-diagnostics.cjs --project <model-folder>
+```
+
+The adapter also exposes `dryas-lsp-diagnostics --project <model-folder> --lsp <executable>`. `--overlay <relative-existing-file>` accepts replacement UTF-8 text on stdin without writing it; `--path` filters output without narrowing loaded scope. An explicit project defaults to `["."]` unless project configuration specifies roots. Results use `observation: "lsp-recompute"` and 1-based UTF-16 positions. After initialization, an observation deadline returns partial results with `settled: false` and exit code 0. Missing engines, initialization failures, protocol errors and crashes fail with a nonzero exit code. Neither a quiet period nor an empty result proves complete checking. MCP `validate` continues to use the saved-project API.
+
+The Skill includes the platform-specific engine. Overrides are `--lsp`, `SYSML_LSP_PATH`, and local configuration; otherwise the launcher uses its bundle, editor user settings (`dryas.lspPath`), then PATH. `--engine-context` explains the selected source. `--configure-lsp <executable>` remembers a machine-local path; `--vscode-settings <settings.json>` selects a custom editor/profile. Multiple distinct editor paths require selection. A host executable must be accessible and runnable in the agent environment.

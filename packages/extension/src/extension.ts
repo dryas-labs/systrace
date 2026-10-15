@@ -2,6 +2,8 @@
 import * as vscode from "vscode";
 import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
+import { observeEditorDiagnostics } from "./editor-diagnostics.js";
+import { engineExecutable } from "./engine-paths.js";
 import { randomUUID } from "node:crypto";
 import { LanguageClient, CloseAction, ErrorAction } from "vscode-languageclient/node";
 import {
@@ -52,20 +54,25 @@ let manager: Manager | undefined;
 function options(
   folder: vscode.WorkspaceFolder,
   provider: LanguageEngineProvider,
+  extensionRoot?: string,
 ): ProjectOptions & { lspPath: string } {
   const settings = vscode.workspace.getConfiguration("dryas", folder.uri);
   return {
     projectRoot: folder.uri.fsPath,
     modelRoots: settings.get<string[]>("modelRoots", ["model"]),
-    lspPath:
-      settings.get<string>("lspPath", "sysml-lsp") === "sysml-lsp"
-        ? (process.env.DRYAS_LSP_PATH ?? "sysml-lsp")
-        : settings.get<string>("lspPath")!,
+    lspPath: engineExecutable(
+      "sysml-lsp",
+      extensionRoot,
+      settings.get<string>("lspPath"),
+      process.env.DRYAS_LSP_PATH,
+    ),
     engine: {
-      executable:
-        settings.get<string>("apiPath", "sysml-grpc") === "sysml-grpc"
-          ? (process.env.DRYAS_API_PATH ?? "sysml-grpc")
-          : settings.get<string>("apiPath")!,
+      executable: engineExecutable(
+        "sysml-grpc",
+        extensionRoot,
+        settings.get<string>("apiPath"),
+        process.env.DRYAS_API_PATH,
+      ),
       expectedVersion: settings.get<string>("expectedEngineVersion", provider.defaultEngineVersion),
       timeoutMs: settings.get<number>("requestTimeoutMs", 30000),
     },
@@ -98,6 +105,15 @@ export class Manager {
     private readonly provider: LanguageEngineProvider = DEFAULT_LANGUAGE_ENGINE_PROVIDER,
   ) {
     assertLanguageEngineProvider(provider);
+    if (typeof vscode.lm?.registerTool === "function")
+      context.subscriptions.push(
+        vscode.lm.registerTool("dryas_editor_diagnostics", {
+          invoke: () =>
+            new vscode.LanguageModelToolResult([
+              new vscode.LanguageModelTextPart(JSON.stringify(this.observeEditorDiagnostics())),
+            ]),
+        }),
+      );
     this.statusBar.name = "DRYAS language service";
     this.statusBar.command = "dryas.showLanguageServiceStatus";
     context.subscriptions.push(
@@ -129,6 +145,13 @@ export class Manager {
       vscode.commands.registerCommand("dryas.showMcpConfiguration", () =>
         this.showMcpConfiguration(),
       ),
+    );
+  }
+
+  observeEditorDiagnostics() {
+    return observeEditorDiagnostics(
+      this.getStatus(),
+      new Set([...this.libraries.values()].map((library) => library.scheme)),
     );
   }
 
@@ -220,7 +243,7 @@ export class Manager {
     for (const folder of folders) {
       if (this.disposed) break;
       const key = folder.uri.toString();
-      const config = options(folder, this.provider);
+      const config = options(folder, this.provider, this.context.extensionPath);
       const previous = this.attempted.get(key);
       const changed = !previous || !sameConfig(previous, config);
       const recovering = this.pendingRecovery.delete(key);
@@ -547,7 +570,10 @@ export class Manager {
       return;
     }
     try {
-      checkExecutableSetting(options(folder, this.provider).engine.executable, "dryas.apiPath");
+      checkExecutableSetting(
+        options(folder, this.provider, this.context.extensionPath).engine.executable,
+        "dryas.apiPath",
+      );
     } catch (error) {
       void vscode.window.showErrorMessage(publicError(error).message);
       return;
@@ -580,7 +606,7 @@ export class Manager {
   private async showMcpConfiguration(): Promise<void> {
     const folder = await this.chooseFolder();
     if (!folder) return;
-    const config = options(folder, this.provider);
+    const config = options(folder, this.provider, this.context.extensionPath);
     const args = [
       join(this.context.extensionPath, "dist", "mcp.cjs"),
       "--project",
@@ -634,13 +660,17 @@ export class Manager {
   }
 }
 
-export async function activate(
-  context: vscode.ExtensionContext,
-): Promise<{ getLanguageServiceStatus: () => ServiceStatus[] }> {
+export async function activate(context: vscode.ExtensionContext): Promise<{
+  getLanguageServiceStatus: () => ServiceStatus[];
+  getEditorDiagnostics: () => ReturnType<typeof observeEditorDiagnostics>;
+}> {
   manager = new Manager(context);
   await manager.refresh("activation");
   const current = manager;
-  return { getLanguageServiceStatus: () => current.getStatus() };
+  return {
+    getLanguageServiceStatus: () => current.getStatus(),
+    getEditorDiagnostics: () => current.observeEditorDiagnostics(),
+  };
 }
 export async function deactivate(): Promise<void> {
   await manager?.dispose();
