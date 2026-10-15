@@ -89,6 +89,10 @@ await copyFile(
   join(root, "packages/engine-adapter/dist/lsp-diagnostics.cjs"),
   join(skill, "scripts/diagnostics.cjs"),
 );
+await copyFile(
+  join(root, "skills/sysml-diagnostics/scripts/run-diagnostics.cjs"),
+  join(skill, "scripts/run-diagnostics.cjs"),
+);
 await copyFile(join(root, "LICENSE"), join(skill, "LICENSE"));
 
 const packages = new Set();
@@ -101,7 +105,7 @@ for (const result of results.filter((_result, index) => jobs[index][0].startsWit
     packages.add(parts.slice(0, end).join("/"));
   }
 let notices =
-  "# Third-party notices\n\nGenerated from dependencies included in the extension and command bundles.\nThe language engine is configured as an external executable and is not included in this VSIX.\n\n";
+  "# Third-party notices\n\nGenerated from dependencies included in the extension and command bundles.\nNative language-engine, standard-library and Go dependency notices are provided separately in runtime/licenses; corresponding engine source is in runtime/source/source.zip.\n\n";
 const seen = new Map();
 for (const path of [...packages].sort()) {
   const folder = join(root, path);

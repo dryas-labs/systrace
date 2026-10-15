@@ -13,3 +13,6 @@
 !dist/lsp-diagnostics.cjs
 !skills/**
 **/*.map
+!runtime/**
+**/engine.local.json
+**/*.local.json

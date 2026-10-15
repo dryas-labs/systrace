@@ -2,7 +2,7 @@
   "name": "systrace",
   "displayName": "DRYAS Systrace",
   "description": "SysML v2 editing and agent tools backed by a language engine.",
-  "version": "0.1.22",
+  "version": "0.1.25",
   "publisher": "dryas-labs",
   "license": "Apache-2.0",
   "private": true,
@@ -187,15 +187,15 @@
       "properties": {
         "dryas.lspPath": {
           "type": "string",
-          "default": "sysml-lsp",
+          "default": "",
           "scope": "machine-overridable",
-          "description": "Language engine LSP executable: absolute path, or sysml-lsp on PATH."
+          "description": "Uses the bundled language engine LSP executable by default. Set another executable path only to override it."
         },
         "dryas.apiPath": {
           "type": "string",
-          "default": "sysml-grpc",
+          "default": "",
           "scope": "machine-overridable",
-          "description": "Language engine API executable: absolute path, or sysml-grpc on PATH."
+          "description": "Uses the bundled language engine model API executable by default. Set another executable path only to override it."
         },
         "dryas.modelRoots": {
           "type": "array",

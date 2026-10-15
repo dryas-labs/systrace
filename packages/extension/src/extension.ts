@@ -5,6 +5,7 @@ import { join, relative, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import { observeEditorDiagnostics } from "./editor-diagnostics.js";
+import { engineExecutable } from "./engine-paths.js";
 import { Projects, overlappingRoots } from "./projects.js";
 import {
   LanguageClient,
@@ -70,20 +71,25 @@ let manager: Manager | undefined;
 function options(
   folder: vscode.WorkspaceFolder,
   provider: LanguageEngineProvider,
+  extensionRoot?: string,
 ): ProjectOptions & { lspPath: string } {
   const settings = vscode.workspace.getConfiguration("dryas", folder.uri);
   return {
     projectRoot: folder.uri.fsPath,
     modelRoots: settings.get<string[]>("modelRoots", ["."]),
-    lspPath:
-      settings.get<string>("lspPath", "sysml-lsp") === "sysml-lsp"
-        ? (process.env.DRYAS_LSP_PATH ?? "sysml-lsp")
-        : settings.get<string>("lspPath")!,
+    lspPath: engineExecutable(
+      "sysml-lsp",
+      extensionRoot,
+      settings.get<string>("lspPath"),
+      process.env.DRYAS_LSP_PATH,
+    ),
     engine: {
-      executable:
-        settings.get<string>("apiPath", "sysml-grpc") === "sysml-grpc"
-          ? (process.env.DRYAS_API_PATH ?? "sysml-grpc")
-          : settings.get<string>("apiPath")!,
+      executable: engineExecutable(
+        "sysml-grpc",
+        extensionRoot,
+        settings.get<string>("apiPath"),
+        process.env.DRYAS_API_PATH,
+      ),
       expectedVersion: settings.get<string>("expectedEngineVersion", provider.defaultEngineVersion),
       timeoutMs: settings.get<number>("requestTimeoutMs", 30000),
     },
@@ -402,7 +408,7 @@ export class Manager {
     for (const folder of folders) {
       if (this.disposed) break;
       const key = folder.uri.toString();
-      const config: ProjectConfig = options(folder, this.provider);
+      const config: ProjectConfig = options(folder, this.provider, this.context.extensionPath);
       try {
         config.graph = await resolveProjectGraph(
           config.projectRoot,
@@ -852,7 +858,10 @@ export class Manager {
       return;
     }
     try {
-      checkExecutableSetting(options(folder, this.provider).engine.executable, "dryas.apiPath");
+      checkExecutableSetting(
+        options(folder, this.provider, this.context.extensionPath).engine.executable,
+        "dryas.apiPath",
+      );
     } catch (error) {
       void vscode.window.showErrorMessage(publicError(error).message);
       return;
@@ -902,7 +911,7 @@ export class Manager {
       if (!this.projectUi.resolve(folder)) return;
       const definition = await readProjectDefinition(
         folder.uri.fsPath,
-        options(folder, this.provider).modelRoots,
+        options(folder, this.provider, this.context.extensionPath).modelRoots,
       );
       await writeProjectDefinition(folder.uri.fsPath, { ...definition, modelRoots: roots });
       this.projectUi.refresh();

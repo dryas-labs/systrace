@@ -114,3 +114,13 @@ it("uses shared roots and references, with explicit roots overriding only the ma
     await rm(reference, { recursive: true, force: true });
   }
 });
+
+it("reports a missing language server with explicit path guidance instead of a generic failure", async () => {
+  const answer = await run(["--lsp", join(root, "missing-sysml-lsp")]);
+  expect(answer.code).toBe(1);
+  expect(answer.result).toBeUndefined();
+  expect(answer.stderr).toContain("ENGINE_NOT_FOUND");
+  expect(answer.stderr).toContain("--lsp");
+  expect(answer.stderr).toContain("PATH");
+  expect(answer.stderr).not.toContain(root);
+});

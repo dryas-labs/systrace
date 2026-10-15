@@ -10,6 +10,7 @@ export default [
       "**/node_modules/**",
       "**/dist/**",
       "packages/extension/skills/**",
+      "packages/extension/runtime/**",
       "artifacts/**",
       ".tmp/**",
       ".vscode-test/**",
@@ -34,6 +35,14 @@ export default [
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
+  },
+  {
+    files: ["skills/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: { process: "readonly", __dirname: "readonly" },
+    },
+    rules: { "@typescript-eslint/no-require-imports": "off" },
   },
   {
     files: ["**/*.mjs"],

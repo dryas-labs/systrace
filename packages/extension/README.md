@@ -2,32 +2,33 @@
 
 **English** | [简体中文](README.zh-Hans.md)
 
-SysML v2 editing for VS Code and Cursor, powered by an external language engine.
+SysML v2 editing for VS Code and Cursor, powered by a bundled language engine running in a separate process.
 This is an early development extension. View rendering and a built-in agent are not implemented.
 
-Version 0.1.22 uses language engine build `v0.9.2-dryas.6`. Selected completion details show
+Version 0.1.25 uses language engine build `v0.9.2-dryas.6`. Selected completion details show
 the native declaration signature, visible reference, actual declaration origin,
 source filename and full documentation. Details load on selection and share the
 engine's documentation extraction with hover. Aliases retain their insertion
 spelling; undocumented elements show their declaration and source only.
 Use the details arrow, or Ctrl+Space while the suggestion list is open, to expand
-the editor's native detail panel. Update both external engine executables; if
+the editor's native detail panel. The VSIX includes matching engine executables; if
 you set `dryas.expectedEngineVersion` explicitly, change it to `v0.9.2-dryas.6`.
 
 See [Language engine](../../docs/language-engine.md) for the current selection.
 
 ## Getting started
 
-1. Build the configured language engine version described in the repository's `config/engine.json`.
-2. Put `sysml-lsp` and `sysml-grpc` on PATH, or set **DRYAS: Lsp Path** and
-   **DRYAS: Api Path** in your editor's **User Settings**. Keep machine paths out of committed workspace settings.
-3. Open a trusted project folder with SysML/KerML files under the project root, or configure
-   the project's source folders with **Configure Model Source Folders**.
-4. Open a `.sysml` file for diagnostics, completion, hover and definition navigation.
+1. Install the VSIX for your operating system and architecture. The matching language engine
+   and its embedded standard library are included; no executable path setup is required.
+2. Open a trusted project folder with SysML/KerML files under the project root, or configure
+   its source folders with **Configure Model Source Folders**.
+3. Open a `.sysml` file for diagnostics, completion, hover and definition navigation.
 
-The engine and its standard library are not bundled in this VSIX. Model folders
-must contain readable UTF-8 files; symbolic links/junctions are refused in this slice.
+Explicit **DRYAS: Lsp Path** and **DRYAS: Api Path** settings remain overrides; clear them
+for the bundled default. Package paths are relative, and machine configuration is not distributed.
+Model folders must contain readable UTF-8 files; symbolic links/junctions are refused.
 Hidden folders and `node_modules` are excluded. Configure narrower model roots when needed.
+Native licenses, dependency notices and source are included under `runtime/`.
 
 If startup reports an invalid model folder, use **Configure Model Source Folders** or
 check `modelRoots` in `.systrace/project.json`. The default `["."]` scans the project root.
@@ -223,24 +224,34 @@ and library markers. Each project's existing connection state includes
 this read fail. An empty collection says nothing about checking completeness.
 The tool does not save files, trigger validation or connect to another window.
 
-For an independent observation, build the repository and run:
+For an independent observation, use the complete Skill directory included in the VSIX or
+extract the portable Skill ZIP. It includes both scripts and the matching native runtime:
 
 ```sh
-npm exec -- dryas-lsp-diagnostics --project <project-folder>
+node <skill-directory>/scripts/run-diagnostics.cjs --project <project-folder>
 ```
 
-The installed extension also includes the standalone command at `dist/lsp-diagnostics.cjs`.
-Its self-contained skill is in `skills/sysml-diagnostics`; copy that whole folder to a
-skill directory supported by your agent. The skill includes `scripts/diagnostics.cjs`,
-which can be run with Node.js without VS Code or the product repository.
+A known project folder works without configuration; use `--project .` when it is the intended
+working directory. Otherwise `--context` searches the working directory and its ancestors
+for `.systrace/project.json`, or legacy `.vscode/settings.json` containing `dryas.modelRoots`.
+It reads project scope without starting an engine. Missing project configuration requests an
+explicit root rather than scanning sibling folders. Results include the resolved `project` context.
+This does not identify VS Code's active project.
 
-The command returns `observation: "lsp-recompute"` and reads all saved SysML/KerML sources
-in the configured project and its declared references. It checks the engine version and
-uses the provider's normal LSP launch arguments. `--lsp` defaults to `sysml-lsp` on PATH;
-`--expected-version` defaults to the selected engine build. User-level settings and
-machine paths are not read. Source folder precedence is explicit `--model-root`, then
-`.systrace/project.json`, then project-local `.vscode/settings.json` (`dryas.modelRoots`),
-then `["."]`. Explicit roots affect only the consuming project; references retain their own scope.
+The launcher uses a package-relative runtime by default; `--engine-context` shows its selection.
+Explicit `--lsp`, `SYSML_LSP_PATH` and the launcher's local configuration remain advanced overrides.
+Without a bundle, 0.1.25's bounded editor-settings and PATH discovery remain available.
+Local `engine.local.json` is never included in a distributed archive. For a portable or remote
+agent, use the package for that environment; a host executable is usable only when accessible
+and compatible. No drive or extension-installation scan is performed.
+
+The diagnostic result uses `observation: "lsp-recompute"` and loads all saved sources in the
+project and declared reference scope. Source-folder precedence is explicit `--model-root`,
+then `.systrace/project.json`, project-local `dryas.modelRoots`, then `["."]`.
+Explicit roots affect only the main project. Engine version checking still happens before LSP.
+The underlying `diagnostics.cjs` / `dryas-lsp-diagnostics` command accepts an explicit engine
+path or PATH; the launcher supplies the bundled choice. Retain stdout JSON for counting,
+grouping and reporting instead of repeating unchanged diagnostic inputs.
 
 `--path <relative-path>` filters printed diagnostics only. Repeat `--path` or `--model-root`
 for multiple entries. `--overlay <relative-file>` reads UTF-8 from stdin and replaces that

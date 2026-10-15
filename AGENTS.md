@@ -14,4 +14,4 @@
 - Use LF and the committed lock file. Never force-push, publish packages or upload local artifacts without user authorization.
 - Keep user documentation in English by default, with `.zh-Hans.md` for Simplified Chinese. Update both editions together; preserve original license and generated third-party notice texts.
 
-- For Agent diagnostic observations, use [the SysML diagnostics skill](skills/sysml-diagnostics/SKILL.md); distinguish editor observations, independent LSP observations and saved-project API validation.
+- For project context and Agent diagnostic observations, use [the SysML diagnostics skill](skills/sysml-diagnostics/SKILL.md); distinguish editor observations, independent LSP observations and saved-project API validation.
