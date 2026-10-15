@@ -38,17 +38,29 @@ jobs:
           cache: false
       - name: Build configured language engine
         run: node scripts/build-engine.mjs
-      - name: Test native engine and MCP tools
+      - name: Test native engine and saved-model queries
         run: npm run test:engine
       - name: Package VSIX
         run: npm run package:vsix
       - name: Test packaged extension on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run -a npm run test:host -- --vsix --bundled
+        run: xvfb-run -a npm run test:host -- --vsix
       - name: Test packaged extension on Windows
         if: runner.os == 'Windows'
-        run: npm run test:host -- --vsix --bundled
-      - name: Upload VSIX and portable Skill
+        run: npm run test:host -- --vsix
+      - name: Test project management on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:host -- --projects --vsix
+      - name: Test project management on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:host -- --projects --vsix
+      - name: Test project references on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:host -- --references --vsix
+      - name: Test project references on Windows
+        if: runner.os == 'Windows'
+        run: npm run test:host -- --references --vsix
+      - name: Upload packaged runtime and Skill
         uses: actions/upload-artifact@v7.0.2
         with:
           name: systrace-vsix-${{ matrix.os }}

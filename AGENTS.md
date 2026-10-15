@@ -1,7 +1,7 @@
 # Working on DRYAS Systrace
 
 - The product is a VS Code extension, also tested in Cursor. Keep editor integration central.
-- `packages/extension` owns editor integration. `engine-adapter` owns saved projects and the external engine. `mcp-server` exposes read-only agent tools.
+- `packages/extension` owns editor integration. `engine-adapter` owns saved projects and the external engine. `engine-adapter` also provides the standalone LSP diagnostics command; the extension exposes current-window Problems to Copilot.
 - The selected language engine owns parsing, name resolution and semantic checks. Do not build a second resolver in TypeScript.
 - Use "language engine" in product documentation and UI. State the selected implementation only in the language-engine selection page. Its provenance, upstream relationships and maintenance policy belong in its own repository. Preserve accurate native identifiers, build metadata and required legal notices.
 - Keep native RPC, diagnostic mapping and engine-specific LSP behavior in the backend implementation. Project sessions use LanguageBackend; model tools and editor services must use the same LanguageEngineProvider.
@@ -13,3 +13,5 @@
 - Report unsupported or unknown capabilities explicitly. No diagnostics is not proof of complete validation.
 - Use LF and the committed lock file. Never force-push, publish packages or upload local artifacts without user authorization.
 - Keep user documentation in English by default, with `.zh-Hans.md` for Simplified Chinese. Update both editions together; preserve original license and generated third-party notice texts.
+
+- For project context and Agent diagnostic observations, use [the SysML diagnostics skill](skills/sysml-diagnostics/SKILL.md); distinguish editor observations, independent LSP observations and saved-project API validation.

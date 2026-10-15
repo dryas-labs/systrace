@@ -42,7 +42,7 @@ No fallback to a different engine is performed.
 | `libraryLookup(model, input, signal)`   | Library lookup/browse result, with explicit limitations                |
 | `close()`                               | Dispose of the backend session                                         |
 
-These operations serve the existing MCP tools `validate`, `find_element`,
+These operations serve the existing saved-model operations `validate`, `find_element`,
 `describe_element` and `library_lookup`. Their input schemas and current response
 behavior are preserved. The common interface exposes language operations and opaque
 model handles. Native RPC names, arbitrary RPC invocation and native model identifiers
@@ -112,7 +112,7 @@ The service description owns the native library URI scheme, capability checks, r
 names and payload decoding. The editor document provider consumes this description
 through the language-engine interface.
 
-LSP may analyze unsaved buffers; MCP tools analyze saved files. A matching configured
+LSP may analyze unsaved buffers; saved-model operations analyze saved files. A matching configured
 engine version does not make those snapshots identical or independently certify their
 bundled-library identity.
 

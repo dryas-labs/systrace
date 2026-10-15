@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import {
   AdapterError,
+  verifyLanguageServiceVersion,
   type LanguageServiceBackend,
   type ProjectOptions,
+  type ProjectGraph,
 } from "@dryas/engine-adapter";
 
-export type ProjectConfig = ProjectOptions & { lspPath: string };
+export type ProjectConfig = ProjectOptions & { lspPath: string; graph?: ProjectGraph };
 export type StartupStage = "configuration" | "model-folders" | "version-check" | "lsp-initialize";
 
 export function sameConfig(a: ProjectConfig, b: ProjectConfig): boolean {
@@ -17,6 +17,7 @@ export function sameConfig(a: ProjectConfig, b: ProjectConfig): boolean {
 export function sameLanguageConfig(a: ProjectConfig, b: ProjectConfig): boolean {
   return (
     a.projectRoot === b.projectRoot &&
+    a.graph?.key === b.graph?.key &&
     a.lspPath === b.lspPath &&
     a.engine.expectedVersion === b.engine.expectedVersion &&
     a.engine.timeoutMs === b.engine.timeoutMs &&
@@ -38,7 +39,7 @@ export function startupError(error: unknown, stage: StartupStage): AdapterError 
   if (stage === "model-folders" && error instanceof AdapterError && error.code === "INVALID_PATH")
     return new AdapterError(
       error.code,
-      `${error.message} Set dryas.modelRoots in Workspace Folder Settings to existing source folders relative to the opened workspace folder. The default is ["model"]; projects with another layout need an explicit setting.`,
+      `${error.message} Use Configure Model Source Folders or check modelRoots in .systrace/project.json; without that file, dryas.modelRoots in Workspace Folder Settings is the fallback. Source folders must exist inside the project. The default is ["."]; configure narrower source folders when needed.`,
     );
   if (error instanceof AdapterError) return error;
   const details = error && typeof error === "object" ? (error as Record<string, unknown>) : {};
@@ -73,17 +74,12 @@ export async function verifyLanguageServer(
   backend: LanguageServiceBackend,
 ): Promise<void> {
   try {
-    const version = await promisify(execFile)(config.lspPath, [...backend.version.args], {
-      windowsHide: true,
-      timeout: Math.min(config.engine.timeoutMs ?? 30000, 10000),
-      env: backend.launch.environment(),
-      maxBuffer: 64 * 1024,
-    });
-    if (!backend.version.matchesOutput(version.stdout, config.engine.expectedVersion!))
-      throw new AdapterError(
-        "ENGINE_VERSION_MISMATCH",
-        "The language server does not match dryas.expectedEngineVersion. Use the configured maintenance build.",
-      );
+    await verifyLanguageServiceVersion(
+      config.lspPath,
+      config.engine.expectedVersion!,
+      backend,
+      config.engine.timeoutMs ?? 30000,
+    );
   } catch (error) {
     throw startupError(error, "version-check");
   }

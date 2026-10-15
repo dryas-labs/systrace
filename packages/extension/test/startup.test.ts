@@ -19,10 +19,10 @@ const config: ProjectConfig = {
   projectRoot: "project",
   modelRoots: ["model"],
   lspPath: "sysml-lsp",
-  engine: { executable: "sysml-grpc", expectedVersion: "v0.9.2-dryas.4", timeoutMs: 30000 },
+  engine: { executable: "sysml-grpc", expectedVersion: "v0.9.2-dryas.5", timeoutMs: 30000 },
 };
 
-it("explains missing default roots and accepts explicitly configured nested source folders", async () => {
+it("explains invalid explicit roots and accepts nested source folders", async () => {
   const root = await mkdtemp(join(tmpdir(), "dryas-model-roots-"));
   try {
     const source = "sysml/src/training/01. Packages";
@@ -33,7 +33,7 @@ it("explains missing default roots and accepts explicitly configured nested sour
         const details = startupError(error, "model-folders");
         expect(details.code).toBe("INVALID_PATH");
         expect(details.message).toContain("dryas.modelRoots");
-        expect(details.message).toContain('["model"]');
+        expect(details.message).toContain('["."]');
         expect(details.message).not.toContain(root);
         return true;
       },

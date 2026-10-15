@@ -7,6 +7,9 @@ import { root, loadConfig } from "./config.mjs";
 
 const config = await loadConfig();
 const host = process.argv.includes("--cursor") ? "cursor" : "vscode";
+const diagnosticChecks = process.argv.includes("--diagnostics");
+const projectChecks = process.argv.includes("--projects");
+const referenceChecks = process.argv.includes("--references");
 const executable =
   config.editors[host] ||
   (host === "vscode" ? await downloadAndUnzipVSCode(config.tests.vscodeVersion) : "");
@@ -17,18 +20,88 @@ const workspace = await mkdtemp(resolve(root, ".tmp/host-test-"));
 await cp(resolve(root, "test/fixtures/hello-system"), resolve(workspace, "project"), {
   recursive: true,
 });
+let workspaceTarget = resolve(workspace, "project");
+if (projectChecks) {
+  const a = resolve(workspace, "ProjectA");
+  const b = resolve(workspace, "ProjectB");
+  await mkdir(resolve(a, "design"), { recursive: true });
+  await mkdir(resolve(b, "library"), { recursive: true });
+  await writeFile(
+    resolve(a, "definitions.sysml"),
+    "package Components {\n  port def PowerPort;\n  part def Battery {\n    port output : PowerPort;\n  }\n}\n",
+  );
+  await writeFile(resolve(a, "notes.md"), "Not a model source.\n");
+  await writeFile(
+    resolve(a, "design/system.sysml"),
+    "package System { private import Components::*; part battery : Battery; }\n",
+  );
+  await writeFile(
+    resolve(b, "library/definitions.sysml"),
+    "package Components { part def Motor; }\n",
+  );
+  await writeFile(
+    resolve(b, "system.sysml"),
+    "package System { private import Components::*; part motor : Motor; part wrong : Battery; }\n",
+  );
+  workspaceTarget = resolve(workspace, "projects.code-workspace");
+  await writeFile(
+    workspaceTarget,
+    JSON.stringify({
+      folders: [
+        { path: a, name: "Project A" },
+        { path: b, name: "Project B" },
+      ],
+    }),
+  );
+}
+if (referenceChecks) {
+  const a = resolve(workspace, "Consumer"),
+    b = resolve(workspace, "Components"),
+    c = resolve(workspace, "Foundation");
+  for (const folder of [a, b, c]) await mkdir(resolve(folder, ".systrace"), { recursive: true });
+  await mkdir(resolve(b, "library"));
+  for (const [folder, modelRoots, references] of [
+    [a, ["."], []],
+    [b, ["library"], ["../Foundation"]],
+    [c, ["."], []],
+  ])
+    await writeFile(
+      resolve(folder, ".systrace/project.json"),
+      JSON.stringify({ version: 1, modelRoots, references }),
+    );
+  await writeFile(
+    resolve(a, "system.sysml"),
+    "package System { private import Components::*; part battery : Battery; }\n",
+  );
+  await writeFile(
+    resolve(b, "library/components.sysml"),
+    "package Components { private import Foundation::*; part def Battery :> BaseBattery; }\n",
+  );
+  await writeFile(resolve(b, "excluded.sysml"), "This is outside the configured source folders.");
+  await writeFile(resolve(c, "base.sysml"), "package Foundation { part def BaseBattery; }\n");
+  workspaceTarget = resolve(workspace, "references.code-workspace");
+  await writeFile(
+    workspaceTarget,
+    JSON.stringify({
+      folders: [
+        { path: a, name: "Consumer" },
+        { path: b, name: "Components" },
+      ],
+    }),
+  );
+}
 const env = {
   ...process.env,
 };
-// Exercise the same User Settings path as a manually installed VSIX, without
-// development environment variables silently fixing a missing setting.
+// A packaged extension must start with empty User Settings and no development
+// engine variables. Source-host checks may use the ignored development config.
 delete env.DRYAS_LSP_PATH;
 delete env.DRYAS_API_PATH;
 await mkdir(resolve(workspace, "profile/User"), { recursive: true });
 await writeFile(
   resolve(workspace, "profile/User/settings.json"),
   JSON.stringify(
-    process.argv.includes("--bundled")
+    process.argv.includes("--vsix") || process.argv.includes("--bundled")
       ? {}
       : {
           "dryas.lspPath": config.engine.lspPath,
@@ -101,7 +174,7 @@ if (process.argv.includes("--vsix")) {
   extensionPath = resolve(workspace, "extensions", installed);
 }
 const args = [
-  resolve(workspace, "project"),
+  workspaceTarget,
   "--new-window",
   "--disable-extensions",
   "--disable-workspace-trust",
@@ -114,7 +187,7 @@ const args = [
   `--user-data-dir=${resolve(workspace, "profile")}`,
   `--extensions-dir=${resolve(workspace, "extensions")}`,
   `--extensionDevelopmentPath=${extensionPath}`,
-  `--extensionTestsPath=${resolve(root, "test/host/dist/index.cjs")}`,
+  `--extensionTestsPath=${resolve(root, diagnosticChecks ? "test/host/dist/diagnostics.cjs" : referenceChecks ? "test/host/dist/references.cjs" : projectChecks ? "test/host/dist/projects.cjs" : "test/host/dist/index.cjs")}`,
 ];
 let output = "";
 const code = await new Promise((done, reject) => {
@@ -155,5 +228,5 @@ await writeFile(resolve(workspace, "host.log"), output);
 if (code !== 0 || !output.includes("DRYAS host checks passed:"))
   throw new Error("Host checks failed. Inspect the ignored .tmp host-test log.");
 console.log(
-  `${host}: ${process.argv.includes("--vsix") ? "VSIX installation and " : ""}activation, language features and saved validation passed in an isolated extension host.`,
+  `${host}: ${process.argv.includes("--vsix") ? "VSIX installation and " : ""}${diagnosticChecks ? "Copilot diagnostic observation" : referenceChecks ? "project references and saved dependency updates" : projectChecks ? "project management and isolation" : "activation, language features and saved validation"} passed in an isolated extension host.`,
 );

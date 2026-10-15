@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import type { LibraryDocumentProtocol } from "@dryas/engine-adapter";
-type LibraryClient = Pick<LanguageClient, "initializeResult" | "sendRequest">;
+type LibraryClient = Pick<LanguageClient, "initializeResult" | "sendRequest" | "sendNotification">;
 
 /** Read the owning engine's bundled sources without copying them into the project. */
 export class StdlibDocuments implements vscode.TextDocumentContentProvider, vscode.Disposable {
@@ -12,6 +12,75 @@ export class StdlibDocuments implements vscode.TextDocumentContentProvider, vsco
   private readonly registration: vscode.Disposable;
   private client: LibraryClient | undefined;
   private timeoutMs = 30000;
+  private catalogue: Promise<import("./project-tree.js").LibraryNamespace[]> | undefined;
+  private readonly internalUris = new Set<string>();
+
+  isInternalUri(uri: vscode.Uri): boolean {
+    return this.internalUris.has(uri.toString());
+  }
+
+  clearCatalog(): void {
+    this.catalogue = undefined;
+  }
+
+  namespaces(scratchUri: string): Promise<import("./project-tree.js").LibraryNamespace[]> {
+    if (!this.catalogue) {
+      const pending = this.readCatalog(scratchUri);
+      this.catalogue = pending;
+      void pending.catch(() => {
+        if (this.catalogue === pending) this.catalogue = undefined;
+      });
+    }
+    return this.catalogue;
+  }
+
+  private async readCatalog(
+    scratchUri: string,
+  ): Promise<import("./project-tree.js").LibraryNamespace[]> {
+    const client = this.client;
+    if (!client || !this.protocol.catalog)
+      throw new Error("Standard-library discovery is unavailable from this language service.");
+    this.internalUris.add(scratchUri);
+    const cancellation = new vscode.CancellationTokenSource();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const entries = await Promise.race([
+        this.protocol.catalog(
+          {
+            request: (method, params) => {
+              if (cancellation.token.isCancellationRequested) throw new vscode.CancellationError();
+              return client.sendRequest<unknown>(method, params, cancellation.token);
+            },
+            notify: async (method, params) => {
+              await client.sendNotification(method, params);
+            },
+          },
+          scratchUri,
+        ),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            cancellation.cancel();
+            reject(new Error("Library browsing exceeded the request deadline."));
+          }, this.timeoutMs);
+        }),
+      ]);
+      if (this.client !== client)
+        throw new Error("The language service changed during library browsing. Refresh to retry.");
+      return entries.map((entry) => ({
+        name: entry.name,
+        uri: this.uriConverters.protocol2Code(entry.uri),
+        range: new vscode.Range(
+          entry.range.start.line,
+          entry.range.start.character,
+          entry.range.end.line,
+          entry.range.end.character,
+        ),
+      }));
+    } finally {
+      clearTimeout(timer);
+      cancellation.dispose();
+    }
+  }
 
   constructor(
     readonly scheme: string,
@@ -34,6 +103,7 @@ export class StdlibDocuments implements vscode.TextDocumentContentProvider, vsco
   attach(client: LibraryClient, timeoutMs: number): boolean {
     const supported = this.protocol.supports(client.initializeResult?.capabilities);
     this.client = supported ? client : undefined;
+    this.clearCatalog();
     this.timeoutMs = timeoutMs;
     if (supported)
       for (const document of vscode.workspace.textDocuments)
@@ -43,6 +113,8 @@ export class StdlibDocuments implements vscode.TextDocumentContentProvider, vsco
 
   detach(): void {
     this.client = undefined;
+    this.clearCatalog();
+    this.internalUris.clear();
   }
 
   async provideTextDocumentContent(

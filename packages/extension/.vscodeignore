@@ -5,11 +5,14 @@
 !LICENSE
 !THIRD_PARTY_NOTICES.md
 !language-configuration.json
+!media/systrace.svg
+!media/project-tree.css
+!media/project-tree.js
+!media/tree-icons/**
 !dist/extension.cjs
-!dist/mcp.cjs
-**/*.map
-
 !dist/lsp-diagnostics.cjs
 !skills/**
+**/*.map
 !runtime/**
 **/engine.local.json
+**/*.local.json

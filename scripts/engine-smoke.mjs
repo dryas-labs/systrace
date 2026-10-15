@@ -2,8 +2,6 @@
 import assert from "node:assert/strict";
 import { cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { ProjectSession } from "../packages/engine-adapter/dist/index.js";
 import { root, loadConfig } from "./config.mjs";
 
@@ -33,38 +31,4 @@ try {
   session.close();
 }
 
-const client = new Client({ name: "dryas-smoke", version: "0.1.0" });
-const transport = new StdioClientTransport({
-  command: process.execPath,
-  args: [
-    resolve(root, "packages/mcp-server/dist/cli.cjs"),
-    "--project",
-    project,
-    "--engine",
-    config.engine.apiPath,
-  ],
-  stderr: "pipe",
-});
-transport.stderr?.resume();
-try {
-  await client.connect(transport);
-  const tools = await client.listTools();
-  assert.deepEqual(
-    tools.tools.map((t) => t.name),
-    ["validate", "find_element", "describe_element", "library_lookup"],
-  );
-  const result = await client.callTool({
-    name: "validate",
-    arguments: { paths: ["model/definitions.sysml"], limit: 1 },
-  });
-  assert(!result.isError);
-  const report = result.structuredContent;
-  assert.equal(report.status, "errors");
-  assert(report.project.errors > 0);
-  assert.equal(report.scope.errors, 0);
-  console.log(
-    "Native checks passed: cross-file validation, real unresolved-name diagnostics, relative locations, MCP discovery and filtered counts.",
-  );
-} finally {
-  await client.close();
-}
+console.log("Native checks passed: cross-file validation and unresolved-name diagnostics.");

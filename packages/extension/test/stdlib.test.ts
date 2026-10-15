@@ -102,7 +102,7 @@ function make(scheme = "dryas-stdlib-test-one", text = "attribute voltage;") {
   const client = {
     initializeResult: { capabilities: { experimental: { openSysmlStdlibContent: true } } },
     sendRequest: request,
-  } as unknown as Pick<LanguageClient, "initializeResult" | "sendRequest">;
+  } as unknown as Pick<LanguageClient, "initializeResult" | "sendRequest" | "sendNotification">;
   provider.attach(client, 100);
   const uri = provider.uriConverters.protocol2Code(engineUri);
   const token = new vscode.CancellationTokenSource();
@@ -234,7 +234,7 @@ it("translates a different engine's library scheme, capability, request and payl
   const client = {
     initializeResult: { capabilities: { fixtureLibrary: true } },
     sendRequest: request,
-  } as unknown as Pick<LanguageClient, "initializeResult" | "sendRequest">;
+  } as unknown as Pick<LanguageClient, "initializeResult" | "sendRequest" | "sendNotification">;
   expect(provider.attach(client, 100)).toBe(true);
   const nativeUri = "fixture-library:/Library%20Folder/Fixture.sysml";
   const uri = provider.uriConverters.protocol2Code(nativeUri);

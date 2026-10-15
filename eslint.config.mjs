@@ -9,20 +9,23 @@ export default [
       "designs/**",
       "**/node_modules/**",
       "**/dist/**",
+      "packages/extension/skills/**",
+      "packages/extension/runtime/**",
       "artifacts/**",
       ".tmp/**",
       ".vscode-test/**",
       "coverage/**",
       "config.js",
       ".engine-ci/**",
-      "packages/extension/skills/**",
-      "packages/extension/runtime/**",
     ],
   },
   ...tseslint.configs.recommended,
   {
-    files: ["skills/**/*.cjs"],
-    rules: { "@typescript-eslint/no-require-imports": "off" },
+    files: ["packages/extension/media/*.js"],
+    languageOptions: {
+      globals: { document: "readonly", window: "readonly", acquireVsCodeApi: "readonly" },
+    },
+    rules: { ...js.configs.recommended.rules },
   },
   {
     files: ["**/*.ts"],
@@ -32,6 +35,14 @@ export default [
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
+  },
+  {
+    files: ["skills/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: { process: "readonly", __dirname: "readonly" },
+    },
+    rules: { "@typescript-eslint/no-require-imports": "off" },
   },
   {
     files: ["**/*.mjs"],

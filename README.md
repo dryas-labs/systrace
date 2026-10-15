@@ -4,9 +4,9 @@
 
 Systrace supports systems engineering modeling and the engineering digital thread.
 The product is a VS Code extension, also tested in Cursor. It uses a language engine
-for SysML v2 editing and an MCP server to connect external agents.
+for SysML v2 editing, with editor observations and a standalone LSP diagnostics command for agents.
 
-This development version provides LSP integration and four read-only MCP tools: `validate`, `find_element`, `describe_element`, `library_lookup`. Validation and project queries use saved files. View rendering and a built-in agent are not implemented. These tools do not establish engineering correctness or full standards conformance.
+This development version provides LSP editing, current-window diagnostic observations and independent LSP diagnostic runs. Saved-project validation remains a separate model-API operation. View rendering and a built-in agent are not implemented.
 
 ## Start developing
 
@@ -25,6 +25,7 @@ automatically executed from an opened model project.
 
 ```sh
 npm run check
+node scripts/build-engine.mjs
 npm run package:vsix
 ```
 
@@ -34,28 +35,30 @@ See [Language engine](docs/language-engine.md) for the current selection.
 
 ## Language engine
 
-[config/engine.json](config/engine.json) records the development engine version and
-source commit. This platform-specific VSIX bundles `sysml-lsp`, `sysml-grpc`, their standard library, license notices and corresponding engine source.
+[config/engine.json](config/engine.json) records the selected engine version and source commit.
+The platform-specific VSIX bundles matching `sysml-lsp` and `sysml-grpc` programs in
+`runtime/<platform>-<arch>/`. The engine's embedded standard library is included with
+those programs. The extension resolves these package-relative paths at runtime;
+fresh installations need no executable path settings or separate engine download.
 
 Version 0.1.26 uses `v0.9.2-dryas.6`. Selected completion details show the native
-declaration, reference spelling, actual declaration origin, source filename and
-complete `doc`. The VSIX includes matching engine executables. Update explicit overrides together. If you
-set `dryas.expectedEngineVersion` explicitly, update it to `v0.9.2-dryas.6` too.
-With the build toolchain required by the configured language engine installed, run:
+declaration, reference spelling, actual declaration origin, source filename and complete `doc`.
+Explicit `dryas.lspPath`, `dryas.apiPath` and development environment overrides remain supported.
+Clear old path overrides to use the bundled runtime. An explicit `dryas.expectedEngineVersion`
+must match the selected build. Keep machine-specific settings out of committed project files.
 
-```sh
-node scripts/build-engine.mjs
-```
-
-The script retrieves and builds the selected maintained version in an ignored
-directory and preserves an existing `config.js`. After installing the VSIX, set
-`dryas.lspPath` and `dryas.apiPath` in the editor's **User Settings**, or put the
-executables on PATH. Do not commit machine paths in workspace settings.
+Development packaging requires the configured engine build and its Go module cache.
+`node scripts/build-engine.mjs` prepares the ignored `.engine-ci` checkout and executables.
+`npm run package:vsix` stages the runtime, preserves licenses and source, checks version/revision
+and `-trimpath`, and writes both VSIX and a self-contained Skill ZIP to `artifacts/`.
+A prepared engine distribution with matching programs, notices and `source.zip` can be supplied
+with `npm run package:vsix -- --engine-dir <distribution-folder>`.
+Both archives are checked for local host paths and identifiers, including their nested source archive.
 
 ## Work with a project
 
-Open a trusted project folder and write `.sysml` or `.kerml` files in `model/`.
-Use `dryas.modelRoots` for other source folders. The extension provides completion,
+Open a trusted project folder and write `.sysml` or `.kerml` files in the project folder.
+Use **Configure Model Source Folders** for other source folders. The extension provides completion,
 hover, cross-file definition navigation and live diagnostics.
 
 Press F12 on standard-library names such as `ISQ::voltage` or `ScalarValues::Integer`
@@ -81,10 +84,8 @@ can reuse the list. Other model edits or an engine restart require fresh complet
 - `DRYAS: Show Language Service Status`: inspect connection state, startup reason,
   attempt count and failure type.
 - `DRYAS: Validate Saved Project`: display diagnostics for the complete saved project.
-- `DRYAS: Show MCP Configuration`: generate local configuration for an external
-  agent; keep it outside version control.
 
-LSP handles unsaved content. MCP validates the saved snapshot on disk. Diagnostic
+LSP handles unsaved content. Saved-project validation checks the snapshot on disk. Diagnostic
 pagination does not change project error totals. The engine API does not provide
 proof of completeness, so a result with zero errors is still `incomplete`.
 
@@ -107,7 +108,7 @@ the Settings UI; JSON settings files require normal JSON quoting and escaping.
 | Command                         | Purpose                                                                         |
 | ------------------------------- | ------------------------------------------------------------------------------- |
 | `npm run check`                 | Local-information checks, formatting, lint, types, build and adapter unit tests |
-| `npm run test:engine`           | Real language engine multi-file validation and an MCP stdio client test         |
+| `npm run test:engine`           | Real language engine multi-file validation and saved-model query checks         |
 | `npm run test:host`             | Isolated VS Code extension-host tests                                           |
 | `npm run test:host -- --cursor` | The same host tests using the Cursor executable in `config.js`                  |
 | `npm run watch`                 | Rebuild development code as it changes                                          |
@@ -117,13 +118,13 @@ Add `--vsix` to host tests to install the packaged extension into an isolated pr
 and test its bundled code, for example `npm run test:host -- --cursor --vsix`.
 
 Test logs, editor configuration and build outputs remain in ignored local directories.
-GitHub Actions runs these checks on Windows and Linux for pull requests and pushes to `main`, including native engine/MCP tests and packaged VS Code extension tests. Successful jobs publish VSIX artifacts for 14 days. Cursor host tests remain a local check.
+GitHub Actions runs these checks on Windows and Linux for pull requests and pushes to `main`, including native engine checks and packaged VS Code extension tests. Successful jobs publish VSIX artifacts for 14 days. Cursor host tests remain a local check.
 
 ## Repository layout
 
 - `packages/extension`: editor integration and the LSP client.
 - `packages/engine-adapter`: engine processes, saved snapshots and validation results.
-- `packages/mcp-server`: read-only tools for external agents.
+- `skills/sysml-diagnostics`: guidance and a command entry point for agent diagnostic observations.
 - [Architecture](docs/architecture.md): current components and boundaries.
 
 English is the default documentation language. Each user guide has English and Simplified Chinese editions linked at the top. Legal texts and generated third-party
@@ -135,23 +136,201 @@ First-party DRYAS code uses the [Apache License 2.0](LICENSE).
 `SPDX-License-Identifier: Apache-2.0` identifies a source file's license. The build
 generates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) from the JavaScript
 dependencies actually bundled and includes licenses and notices in the VSIX.
-Licensing and release inventories for the bundled language engine and its standard
-library are managed separately.
+Native engine, standard-library, Go and dependency notices are included in `runtime/licenses/`.
+The selected engine source is included in `runtime/source/source.zip`; `runtime/manifest.json`
+records the version, source revision, relative executable locations and binary hashes.
 
-## Agent diagnostics
+## Projects
 
-In VS Code Chat, use `#systraceProblems` (`dryas_editor_diagnostics`) to read this window's existing SysML/KerML Problems, including unsaved edits, related information and diagnostic tags. Results include all diagnostic providers and retain each diagnostic's source. Connection state is reported per workspace; disconnected services can leave stale Problems. `observation: "editor"` and `index: "unconfirmed"` describe an observation, not complete validation.
+The **Projects** view in the dedicated **Systrace** sidebar lists the workspace's local project folders.
+Use **New Systrace Project** to choose a name and parent directory, or **Open Systrace Project**
+to add an existing folder. Each folder is a project root. Click a project to make it the
+default target for saved validation; switching editor tabs does not
+change that selection. Other projects remain editable. Closing a project removes its
+workspace entry and stops this extension's services, without deleting files or changing an
+independently started diagnostic commands. Save the VS Code workspace to reopen its project list.
 
-For an external agent, use the portable `sysml-diagnostics` Skill. Its launcher starts an independent language-server process against saved files:
+Model files can live at the project root or in subfolders. Use **Configure Model Source
+Folders** to save the scope in `.systrace/project.json`. Existing projects without this file
+use `dryas.modelRoots`, defaulting to `["."]`; older explicit values such as `["model"]`
+remain effective until the shared project configuration is created. Hidden folders and `node_modules` are excluded, matching
+the language service. Other folders, including `designs`, can contain model sources; generated
+model files should live outside configured source roots. Custom glob exclusions are not
+provided by this version.
 
-```sh
-node <skill-directory>/scripts/run-diagnostics.cjs --project <model-folder>
+Project roots must be separate, non-nested directories so two language services cannot own
+the same source. An overlapping workspace configuration is reported instead of loading a
+combined model. Opening projects does not create a dependency; use Add Project Reference to declare one.
+
+For an isolated two-project check, run `npm run test:host -- --projects --vsix`; add `--cursor`
+to run the same check in the configured Cursor installation. Project-reference checks use
+`npm run test:host -- --references --vsix`.
+
+## Project tree
+
+Click **Systrace** in the Activity Bar to open its dedicated sidebar, separate from
+Explorer. With the default source scope, model files and subfolders appear directly
+under the project name. Separately configured source folders use their actual
+project-relative names. The read-only **Standard Library** is a separate node.
+Source folders contain `.sysml` / `.kerml` files; expand a
+file for the declaration hierarchy returned by the language engine. Click an
+element to navigate to its source. Unsaved edits refresh the outline; file creation
+and deletion refresh the folders. A refresh action is also available in the title bar.
+
+Library discovery is lazy and lists library namespaces the engine exposes in the
+current project context. Expand them for declared members and read-only source.
+Name shadowing can affect the visible catalogue; imports and re-exports are not
+expanded as duplicate declarations. Type labels use only engine-supplied information.
+Browsing another project or a library does not rebind an existing agent conversation.
+
+Right-click a project or source folder and choose **New Namespace…**, or use the
+same action in the Projects title bar. Enter a name to create and open a matching
+`.sysml` file containing a named `package`. With multiple source folders, a project-level
+action asks which one to use. The project's LSP checks an unquoted declaration first,
+then a quoted declaration if necessary. Creation requires diagnostics without errors
+and the exact expected package name in the returned outline. No local keyword list or
+identifier regular expression decides the spelling. Temporary buffers are closed after
+checking; unavailable, failed or timed-out checks do not create a file.
+Existing files are never overwritten. The filename and package
+name can subsequently be changed independently. Creating from another project's
+context menu does not change the current project.
+
+Names containing an apostrophe currently cannot pass this creation check when the
+language service returns an escaped label instead of the requested name. The action
+reports that it could not confirm the name and leaves the project files unchanged.
+
+To remove a namespace file, right-click its `.sysml` file node and choose
+**Delete Namespace…**. A modal confirmation shows the project and relative file
+path. Only **Delete** proceeds; cancelling or closing the dialog keeps the file.
+The entire file and all declarations in it are removed through the editor's file
+operation. The tree refreshes after deletion. This action is unavailable on model
+elements, folders, KerML files and read-only library nodes.
+
+## Project references
+
+Right-click the consuming project and choose **Add Project Reference…**. Select an open
+project or **Browse for Project Folder…** to choose an external project folder. With no
+other project open, the folder dialog appears directly. External references do not add
+workspace folders or change the current project. Projects already directly referenced are
+hidden from the picker; selecting the same folder through Browse reports an existing reference. **Project References**
+shows direct and transitive references. Referenced files open read-only in the consumer's
+language context; **Open Referenced Project** opens the owning project for editing.
+**Remove Project Reference** removes the relationship, not the referenced files. A dependency
+remains available when its project is closed in the workspace.
+
+Project source folders and references are stored in `.systrace/project.json` with relative
+paths. New projects create this file. Adding a reference initializes missing configuration
+for open projects using their current source folders. External folders are left unchanged:
+their existing project configuration supplies the scope, or the entire folder is used
+when no configuration exists. **Configure Model Source Folders**
+also writes this file. It takes precedence over the legacy `dryas.modelRoots` setting and
+saved-model callers' fallback roots. Engine executable paths stay in local editor configuration.
+
+```json
+{
+  "version": 1,
+  "modelRoots": ["."],
+  "references": ["../SharedComponents"]
+}
 ```
 
-The adapter also exposes `dryas-lsp-diagnostics --project <model-folder> --lsp <executable>`. `--overlay <relative-existing-file>` accepts replacement UTF-8 text on stdin without writing it; `--path` filters output without narrowing loaded scope. An explicit project defaults to `["."]` unless project configuration specifies roots. Results use `observation: "lsp-recompute"` and 1-based UTF-16 positions. After initialization, an observation deadline returns partial results with `settled: false` and exit code 0. Missing engines, initialization failures, protocol errors and crashes fail with a nonzero exit code. Neither a quiet period nor an empty result proves complete checking. MCP `validate` continues to use the saved-project API.
+The LSP, saved validation and saved-model queries load the same dependency closure. Only saved
+changes in referenced projects propagate to consumers; unsaved work stays in the owning
+project's editing session. Saved dependency changes refresh consumer analysis and read-only
+tabs. Reference/source-configuration changes reconnect affected language services and close
+their old dependency tabs. Deleting a dependency source also reloads its consumers to
+remove cached declarations. Ordinary saved edits use file updates without restarting.
+Saved-model sessions reread project configuration on each request.
 
-The Skill includes the platform-specific engine. Overrides are `--lsp`, `SYSML_LSP_PATH`, and local configuration; otherwise the launcher uses its bundle, editor user settings (`dryas.lspPath`), then PATH. `--engine-context` explains the selected source. `--configure-lsp <executable>` remembers a machine-local path; `--vscode-settings <settings.json>` selects a custom editor/profile. Multiple distinct editor paths require selection. A host executable must be accessible and runnable in the agent environment.
+A project reference makes source available; SysML `import` still controls namespace access.
+The engine resolves names and reports model conflicts. Project-reference cycles, missing
+folders and overlapping project roots are reported as project configuration errors; this
+version rejects reference cycles as a loading policy, not a SysML language rule. Projects
+must be on the same drive for relative references. Saved validation reports dependency files
+under `.references/<id>/…`, with `content.references` mapping these IDs to projects.
 
-Packaging produces matching `dryas-systrace-<version>.vsix` and `systrace-diagnostics-skill-<version>.zip` in `artifacts/`. Run `npm run package:vsix -- --engine-source <built-engine-checkout>` or supply `--engine-dir <prepared-distribution>`; by default the build uses `.engine-ci`. Packaging checks the engine version, source revision, licenses and private-path exclusions. Skill instructions and discovery live in `skills/sysml-diagnostics`; the diagnostic bundle is built from engine-adapter sources. Machine-local `engine.local.json` is excluded.
+## Project tree display
 
-Development checks accept `DRYAS_LSP_PATH`, `DRYAS_API_PATH` and `DRYAS_VSCODE_PATH` as local overrides. `npm run test:host -- --vsix --bundled` installs the package in an isolated editor profile with no engine path settings and invokes the diagnostic tool during an unsaved edit.
+**DRYAS › Project Tree: Display Mode** is a User setting shared by all projects.
+The default **Compact — one line** uses the editor's native tree: element name,
+explicit type and declaration kind. **Detailed — two lines** uses a custom sidebar
+presentation, with the name above its kind and type. Both use the same project
+provider and commands. Switching modes does not reconnect the language engine or
+change project scope. Expansion state is kept separately by each view.
+
+Declaration kinds, reference modifiers and explicit types come from the language
+engine's document outline. Systrace does not parse model text to invent missing
+labels. This development version requires engine build `v0.9.2-dryas.6` for the
+outline details. Symbols without presentation information retain a generic icon.
+
+Both display modes share the same icons and category mapping. Definitions add a straight
+vertical bar of fixed length and spacing to the left of the category's base shape; usages
+use the same base shape without the bar. Amber and blue reinforce the distinction.
+Packages, comments, documentation and aliases have separate neutral icons.
+Metadata uses an `@` motif; multiplicity uses brackets, not `#`. A `ref part` keeps its part
+icon and native `ref part` label. KerML types and features use the corresponding visual
+families while retaining their native kind names. These are Systrace UI conventions.
+
+The display reflects only the distinctions supplied by the engine. Unknown categories use a
+question-mark icon with the original label. For example, an `enum` label alone cannot tell
+an enumeration literal from a usage.
+
+## Diagnostic observations for agents
+
+Copilot can use **Systrace: Current Window Problems** (`#systraceProblems`, tool
+`dryas_editor_diagnostics`). It returns `observation: "editor"` from this window's
+existing SysML/KerML Problems collection, including every severity, unsaved documents
+and library markers. Each project's existing connection state includes
+`index: "unconfirmed"`. Disconnection does not discard the current collection or make
+this read fail. An empty collection says nothing about checking completeness.
+The tool does not save files, trigger validation or connect to another window.
+Diagnostic source, tags and related information are retained from all SysML/KerML providers.
+
+For an independent observation, use the complete Skill directory included in the VSIX or
+extract the portable Skill ZIP. It includes both scripts and the matching native runtime:
+
+```sh
+node <skill-directory>/scripts/run-diagnostics.cjs --project <project-folder>
+```
+
+A known project folder works without configuration; use `--project .` when it is the intended
+working directory. Otherwise `--context` searches the working directory and its ancestors
+for `.systrace/project.json`, or legacy `.vscode/settings.json` containing `dryas.modelRoots`.
+It reads project scope without starting an engine. Missing project configuration requests an
+explicit root rather than scanning sibling folders. Results include the resolved `project` context.
+This does not identify VS Code's active project.
+
+The launcher uses a package-relative runtime by default; `--engine-context` shows its selection.
+Explicit `--lsp`, `SYSML_LSP_PATH` and the launcher's local configuration remain advanced overrides.
+Without a bundle, 0.1.26's bounded editor-settings and PATH discovery remain available.
+Local `engine.local.json` is never included in a distributed archive. For a portable or remote
+agent, use the package for that environment; a host executable is usable only when accessible
+and compatible. No drive or extension-installation scan is performed.
+
+The diagnostic result uses `observation: "lsp-recompute"` and loads all saved sources in the
+project and declared reference scope. Source-folder precedence is explicit `--model-root`,
+then `.systrace/project.json`, project-local `dryas.modelRoots`, then `["."]`.
+Explicit roots affect only the main project. Engine version checking still happens before LSP.
+The underlying `diagnostics.cjs` / `dryas-lsp-diagnostics` command accepts an explicit engine
+path or PATH; the launcher supplies the bundled choice. Retain stdout JSON for counting,
+grouping and reporting instead of repeating unchanged diagnostic inputs.
+
+`--path <relative-path>` filters printed diagnostics only. Repeat `--path` or `--model-root`
+for multiple entries. `--overlay <relative-file>` reads UTF-8 from stdin and replaces that
+existing project file only in this LSP session. It never changes the file on disk. The file
+must belong to the project's source scope; referenced projects and library files cannot be overlaid.
+
+After all files have been opened, receiving at least one diagnostic publication per file
+(including an empty publication) and then 500 ms without updates yields `settled: true`.
+This is a quiet-period observation, not proof of index completion. Results always report
+`index: "unconfirmed"`. `--timeout-ms` defaults to 30000. If initialization succeeded but
+the observation times out, the command returns available diagnostics with `settled: false`
+and exits 0. No model files also produces an unsettled observation. Diagnostic errors do
+not change the exit code. Invalid input, version/handshake failure or a process/protocol
+failure exits 1 with a single sanitized error line.
+
+Both observations use 1-based lines and UTF-16 character columns. They are separate from
+**Validate Saved Project**, which continues to call the model API for saved-project checks
+and retains its 1-based UTF-8 byte-column contract. Neither empty diagnostics nor
+`settled: false` establishes complete checking. `documentVersion` in the editor observation
+identifies the current buffer, not a certified version of its cached diagnostics.

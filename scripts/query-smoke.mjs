@@ -2,8 +2,7 @@
 import assert from "node:assert/strict";
 import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { ProjectSession } from "../packages/engine-adapter/dist/index.js";
 import { root, loadConfig } from "./config.mjs";
 
 export async function querySmoke() {
@@ -13,34 +12,22 @@ export async function querySmoke() {
   await cp(resolve(root, "test/fixtures/model-queries/model"), resolve(project, "model"), {
     recursive: true,
   });
-  const client = new Client({ name: "dryas-query-smoke", version: "0.1.0" });
-  const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: [
-      resolve(root, "packages/mcp-server/dist/cli.cjs"),
-      "--project",
-      project,
-      "--engine",
-      config.engine.apiPath,
-    ],
-    stderr: "pipe",
+  const session = new ProjectSession({
+    projectRoot: project,
+    engine: { executable: config.engine.apiPath },
   });
-  transport.stderr?.resume();
-  const call = async (name, args) => {
-    const response = await client.callTool({ name, arguments: args });
-    assert(!response.isError, `${name} failed: ${response.content?.[0]?.text}`);
-    return response.structuredContent;
-  };
+  const call = (name, args) =>
+    ({
+      validate: () => session.validate(args),
+      find_element: () => session.findElement(args),
+      describe_element: () => session.describeElement(args),
+      library_lookup: () => session.libraryLookup(args),
+    })[name]();
   const describe = async (name, inherited = false) =>
     (await call("describe_element", { qualifiedName: name, includeInherited: inherited })).items[0];
   const has = (values, id) => values.items.some((e) => e.qualifiedName === id);
   let probes = 0;
   try {
-    await client.connect(transport);
-    assert.deepEqual(
-      (await client.listTools()).tools.map((t) => t.name),
-      ["validate", "find_element", "describe_element", "library_lookup"],
-    );
     const validation = await call("validate", {});
     assert.equal(
       validation.project.errors,
@@ -153,11 +140,9 @@ export async function querySmoke() {
     assert(first.nextCursor);
     const second = await call("find_element", { cursor: first.nextCursor, limit: 1 });
     assert.notEqual(first.items[0].id, second.items[0].id);
-    const badCursor = await client.callTool({
-      name: "library_lookup",
-      arguments: { cursor: first.nextCursor },
+    await assert.rejects(() => call("library_lookup", { cursor: first.nextCursor }), {
+      code: "STALE_CURSOR",
     });
-    assert(badCursor.isError);
     const alias = await describe("Controls::aliasUse");
     assert(alias.metadata.some((m) => m.keyword === "secure"));
     const body = await describe("Controls::bodyOnly");
@@ -182,11 +167,7 @@ export async function querySmoke() {
     assert(voltage.items[0].element.documentation.includes("electric tension"));
     const browse = await call("library_lookup", { namespace: "ScalarValues", name: "Integer" });
     assert(has(browse, "ScalarValues::Integer"));
-    const missing = await client.callTool({
-      name: "describe_element",
-      arguments: { qualifiedName: "Definitions::Missing" },
-    });
-    assert(missing.isError);
+    await assert.rejects(() => call("describe_element", { qualifiedName: "Definitions::Missing" }));
     assert(
       has(await call("find_element", { name: "Battery" }), "Definitions::Battery"),
       "Rejected query must not destroy the transport.",
@@ -196,11 +177,9 @@ export async function querySmoke() {
       file,
       (await readFile(file, "utf8")).replace("part def Battery", "part def BatteryRenamed"),
     );
-    const stale = await client.callTool({
-      name: "find_element",
-      arguments: { cursor: first.nextCursor },
+    await assert.rejects(() => call("find_element", { cursor: first.nextCursor }), {
+      code: "STALE_CURSOR",
     });
-    assert(stale.isError);
     const renamed = await call("find_element", { name: "BatteryRenamed" });
     assert(has(renamed, "Definitions::BatteryRenamed"));
     assert(renamed.content.projectRevision > validation.content.projectRevision);
@@ -213,10 +192,10 @@ export async function querySmoke() {
     assert(!isolated.items[0].features.some((f) => f.name === "projectOnly"));
     assert.equal(probes, 12);
     console.log(
-      "Native MCP query checks passed: 12 migrated probe contracts, metadata controls, library isolation, pagination, edits and recovery.",
+      "Native query checks passed: 12 migrated probe contracts, metadata controls, library isolation, pagination, edits and recovery.",
     );
   } finally {
-    await client.close();
+    session.close();
   }
 }
 

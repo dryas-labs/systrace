@@ -113,7 +113,13 @@ export async function run(): Promise<void> {
     observedFile.diagnostics.map((entry) => entry.message),
     vscode.languages.getDiagnostics(uri).map((entry) => entry.message),
   );
-  await vscode.commands.executeCommand("undo");
+  const restoreType = new vscode.WorkspaceEdit();
+  restoreType.replace(
+    uri,
+    new vscode.Range(start, start.translate(0, "MissingType".length)),
+    "Battery",
+  );
+  assert(await vscode.workspace.applyEdit(restoreType));
   await eventually(
     async () => vscode.languages.getDiagnostics(uri),
     (list) => !list.some((d) => d.severity === vscode.DiagnosticSeverity.Error),

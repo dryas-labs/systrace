@@ -13,5 +13,8 @@ artifacts/
 /config.js
 .engine-ci/
 
+# Packaged skill is generated from the canonical skill and command bundle.
 /packages/extension/skills/
+
+# Native runtime is staged by the packaging command.
 /packages/extension/runtime/
